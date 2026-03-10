@@ -4,8 +4,8 @@ from sklearn.linear_model import LinearRegression
 from datetime import timedelta
 
 if len(sys.argv) == 3:
-    warehouse = int(sys.argv[1])
-    date = sys.argv[2]
+    warehouse = int(sys.argv[1])    # total warehouse capacity
+    date = sys.argv[2]              # start date
 
 # fill missing dates
 def fill_date(df):
@@ -87,3 +87,4 @@ stocks = include_PO(stocks, 'supplied_products_by_' + date + '.csv', dates, prod
 availiable_space = get_available_warehouse_space(stocks, dates, warehouse)
 availiable_space['Space'][availiable_space['Space'] > warehouse] = warehouse
 print(availiable_space)
+availiable_space.to_csv('warehouse_availiable_space.csv')
