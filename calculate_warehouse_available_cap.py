@@ -1,90 +1,149 @@
 import sys
-import pandas as pd
-from sklearn.linear_model import LinearRegression
 from datetime import timedelta
 
-if len(sys.argv) == 3:
-    warehouse = int(sys.argv[1])    # total warehouse capacity
-    date = sys.argv[2]              # start date
+import pandas as pd
+from sklearn.linear_model import LinearRegression
 
-# fill missing dates
-def fill_date(df):
-    df['Day'] = pd.to_datetime(df['Day'], errors='coerce')  # Преобразуем в datetime
+
+MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
+FORECAST_DAYS = 1096  # Горизонт прогноза в днях (примерно 3 года).
+OUTPUT_FILENAME = 'warehouse_availiable_space.csv'  # Имя CSV-файла с результатом расчета.
+
+
+def parse_args():
+    '''Читает аргументы CLI и нормализует дату для имен входных файлов.'''
+    if len(sys.argv) != 3:
+        raise ValueError('Usage: python calculate_warehouse_available_cap.py <warehouse_capacity> <date>')
+    warehouse_capacity = int(sys.argv[1])
+    raw_date = sys.argv[2]
+    normalized_date = raw_date[:4] + '-' + raw_date[8:10] + '-' + raw_date[5:7]
+    return warehouse_capacity, normalized_date
+
+
+def fill_missing_dates(df):
+    '''Заполняет пропущенные дни в диапазоне дат нулевыми продажами.'''
+    df['Day'] = pd.to_datetime(df['Day'], errors='coerce')
     full_range = pd.date_range(start=df['Day'].min(), end=df['Day'].max(), freq='D')
-    df = df.set_index('Day')
-    df = df.reindex(full_range, fill_value=0)
+    df = df.set_index('Day').reindex(full_range, fill_value=0)
     return df.rename_axis('Day').reset_index()
 
-def predict_sales(days_ahead, df1, df1_col = 'Sold', rez_col = 'Predicted Sold'):
-    model = LinearRegression()
-    model.fit(df1[['Date_ordinal']], df1[df1_col])
-    last_date = df1['Day'].max()
-    # future_dates = [last_date + timedelta(days=i) for i in range(1, days_ahead + 1)]
-    future_dates = [pd.to_datetime(last_date) + timedelta(days=i) for i in range(1, days_ahead + 1)]
-    future_ordinals = [d.toordinal() for d in future_dates]
-    predicted_sales = model.predict(pd.DataFrame({'Date_ordinal': future_ordinals}))
-    predicted_sales = [float(x) if float(x) >= 0 else 0 for x in predicted_sales]
-    return pd.DataFrame({'Day': future_dates, rez_col: predicted_sales})
 
-def prepare_prod(filename):
+def predict_sales(days_ahead, sales_df, source_col='Sold', result_col='Predicted Sold'):
+    '''Строит линейный прогноз продаж на заданное количество дней вперед.'''
+    model = LinearRegression()
+    model.fit(sales_df[['Date_ordinal']], sales_df[source_col])
+
+    last_date = sales_df['Day'].max()
+    future_dates = [pd.to_datetime(last_date) + timedelta(days=i) for i in range(1, days_ahead + 1)]
+    future_ordinals = [day.toordinal() for day in future_dates]
+
+    predicted_values = model.predict(pd.DataFrame({'Date_ordinal': future_ordinals}))
+    predicted_values = [float(x) if float(x) >= 0 else 0 for x in predicted_values]
+    return pd.DataFrame({'Day': future_dates, result_col: predicted_values})
+
+
+def aggregate_sku_sales(sku_df):
+    '''Агрегирует продажи SKU по дням и добавляет порядковый номер даты.'''
+    sku_df = sku_df.sort_values(['Day'], ascending=False)
+    daily_sales = sku_df.groupby('Day', as_index=False)['Net items sold'].sum()
+    daily_sales = daily_sales.rename(columns={'Net items sold': 'Sold'})
+    daily_sales = fill_missing_dates(daily_sales)
+    daily_sales['Date_ordinal'] = daily_sales['Day'].map(pd.Timestamp.toordinal)
+    return daily_sales
+
+
+def prepare_products(filename):
+    '''Готовит датасеты по SKU и оставляет только SKU с достаточной историей.'''
     data = pd.read_csv(filename)
     data['Day'] = pd.to_datetime(data['Day'])
-    prod_list = list(data['Product variant SKU at time of sale'].unique())
-    prod = [data[data['Product variant SKU at time of sale'] == sku].reset_index(drop = True) for sku in prod_list]
 
-    for i in range(len(prod)):
-        prod[i] = prod[i].sort_values(['Day'], ascending = False)
-        term_prod = pd.DataFrame()
-        term_prod['Day'] = prod[i]['Day'].unique()
-        sold = []
-        for date in list(prod[i]['Day'].unique()):
-            sold.append(prod[i][prod[i]['Day'] == date]['Net items sold'].sum())
-        term_prod['Sold'] = sold
-        prod[i] = term_prod
-        prod[i] = fill_date(prod[i])
-        prod[i]['Date_ordinal'] = prod[i]['Day'].map(pd.Timestamp.toordinal)
+    sku_list = list(data['Product variant SKU at time of sale'].unique())
+    prepared_products = []
+    prepared_skus = []
 
-    term_prod = []
-    term_list = []
-    for i in range(len(prod)):
-        if len(prod[i]) >= 90:
-            term_prod.append(prod[i])
-            term_list.append(prod_list[i])
-    return term_prod, term_list
+    for sku in sku_list:
+        sku_data = data[data['Product variant SKU at time of sale'] == sku].reset_index(drop=True)
+        daily_data = aggregate_sku_sales(sku_data)
+        if len(daily_data) >= MIN_HISTORY_DAYS:
+            prepared_products.append(daily_data)
+            prepared_skus.append(sku)
 
-def get_stocks(pred, dates, prod_list, filename):
-    stocks = pd.concat([-pred[i]['Predicted Sold Total'] for i in range(len(pred))], axis = 1).transpose().reset_index(drop = True)
+    return prepared_products, prepared_skus
+
+
+def calculate_stocks(predictions, dates, sku_list, inventory_filename):
+    '''Собирает прогнозные остатки на горизонте прогноза для каждого SKU.'''
+    stocks = pd.concat(
+        [-prediction['Predicted Sold Total'] for prediction in predictions],
+        axis=1,
+    ).transpose().reset_index(drop=True)
     stocks.columns = dates[1:]
-    stocks[dates[0]] = pd.read_csv(filename)[dates[0]]
-    stocks['SKU'] = prod_list
+    stocks[dates[0]] = pd.read_csv(inventory_filename)[dates[0]]
+    stocks['SKU'] = sku_list
+
     for i in range(1, len(dates)):
         stocks[dates[i]] += stocks[dates[0]]
     return stocks
 
-def include_PO(stocks_df, PO_filename, dates, prod_list):
-    PO = pd.read_csv(PO_filename)
-    for i in range(len(PO)):
-        for j in range(dates.index(PO['Day'].iloc[i]), len(dates)):
-            stocks_df.loc[prod_list.index(PO['SKU'].iloc[i]), dates[j]] += PO['Qty'].iloc[i]
+
+def include_purchase_orders(stocks_df, po_filename, dates, sku_list):
+    '''Добавляет поставки PO к остаткам, начиная с даты поступления.'''
+    purchase_orders = pd.read_csv(po_filename)
+    for i in range(len(purchase_orders)):
+        po_day = purchase_orders['Day'].iloc[i]
+        po_sku = purchase_orders['SKU'].iloc[i]
+        po_qty = purchase_orders['Qty'].iloc[i]
+        for j in range(dates.index(po_day), len(dates)):
+            stocks_df.loc[sku_list.index(po_sku), dates[j]] += po_qty
     return stocks_df
 
-def get_available_warehouse_space(stocks_df, dates, warehouse):
+
+def get_available_warehouse_space(stocks_df, dates, warehouse_capacity):
+    '''Рассчитывает свободное место склада по дням.'''
     warehouse_available = pd.DataFrame()
     warehouse_available['Day'] = dates
-    warehouse_available['Space'] = [int(warehouse - stocks_df[dates[i]].sum()) for i in range(len(dates))]
+    warehouse_available['Space'] = [
+        int(warehouse_capacity - stocks_df[dates[i]].sum()) for i in range(len(dates))
+    ]
     return warehouse_available
 
-date = date[:4] + '-' + date[8:10] + '-' + date[5:7]
-prod, prod_list = prepare_prod('sales_by_' + date + '.csv')
-pred = []
-for i in range(len(prod)):
-    pred.append(predict_sales(1096, prod[i]))
-    pred[i]['Predicted Sold Total'] = pred[i]['Predicted Sold'].cumsum()
-dates = list(day[:4] + '/' + day[8:10] +'/' + day[5:7] for day in pd.date_range(start = str(prod[0]['Day'].max())[:10], periods = 1097).astype(str))
 
-stocks = get_stocks(pred, dates, prod_list, 'inventory_level_on_' + date + '.csv')
-stocks = include_PO(stocks, 'supplied_products_by_' + date + '.csv', dates, prod_list)
-availiable_space = get_available_warehouse_space(stocks, dates, warehouse)
-availiable_space['Space'][availiable_space['Space'] > warehouse] = warehouse
-print(availiable_space)
-availiable_space.to_csv('warehouse_availiable_space.csv')
+def build_dates(start_day):
+    '''Формирует список дат в формате, ожидаемом входными CSV-таблицами.'''
+    date_range = pd.date_range(start=str(start_day)[:10], periods=FORECAST_DAYS + 1).astype(str)
+    return [day[:4] + '/' + day[8:10] + '/' + day[5:7] for day in date_range]
+
+
+def run_pipeline(warehouse_capacity, date):
+    '''Запускает полный расчет доступной емкости склада.'''
+    products, sku_list = prepare_products('sales_by_' + date + '.csv')
+    predictions = []
+
+    for product_df in products:
+        prediction = predict_sales(FORECAST_DAYS, product_df)
+        prediction['Predicted Sold Total'] = prediction['Predicted Sold'].cumsum()
+        predictions.append(prediction)
+
+    dates = build_dates(products[0]['Day'].max())
+
+    stocks = calculate_stocks(predictions, dates, sku_list, 'inventory_level_on_' + date + '.csv')
+    stocks = include_purchase_orders(stocks, 'supplied_products_by_' + date + '.csv', dates, sku_list)
+
+    available_space = get_available_warehouse_space(stocks, dates, warehouse_capacity)
+    available_space.loc[available_space['Space'] > warehouse_capacity, 'Space'] = warehouse_capacity
+    return available_space
+
+
+def main():
+    '''Точка входа: читает аргументы, выполняет расчет и сохраняет результат.'''
+    # Ожидаемые параметры CLI:
+    # 1) warehouse_capacity (int) — общая вместимость склада.
+    # 2) date (str, формат YYYY-DD-MM) — дата, из которой формируются имена входных файлов.
+    warehouse_capacity, date = parse_args()
+    available_space = run_pipeline(warehouse_capacity, date)
+    print(available_space)
+    available_space.to_csv(OUTPUT_FILENAME, index=False)
+
+
+if __name__ == '__main__':
+    main()
