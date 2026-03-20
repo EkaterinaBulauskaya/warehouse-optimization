@@ -6,21 +6,18 @@ from sklearn.linear_model import LinearRegression
 
 
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
-FORECAST_DAYS = 1096  # Горизонт прогноза в днях (примерно 3 года).
 OUTPUT_FILENAME = 'warehouse_availiable_space.csv'  # Имя CSV-файла с результатом расчета.
 
 
 def parse_args():
     '''Читает аргументы CLI и нормализует дату для имен входных файлов.'''
-    if len(sys.argv) < 3:
+    if len(sys.argv) != 4:
         raise ValueError('Usage: python calculate_warehouse_available_cap.py <warehouse_capacity> <date>')
     warehouse_capacity = int(sys.argv[1])
     raw_date = sys.argv[2]
     normalized_date = raw_date[:4] + '-' + raw_date[8:10] + '-' + raw_date[5:7]
-    if len(sys.argv) == 4:
-        global FORECAST_DAYS
-        FORECAST_DAYS = int(sys.argv[3])
-    return warehouse_capacity, normalized_date
+    forecast_days_amount = int(sys.argv[3])
+    return warehouse_capacity, normalized_date, forecast_days_amount
 
 
 def fill_missing_dates(df):
@@ -112,13 +109,13 @@ def get_available_warehouse_space(stocks_df, dates, warehouse_capacity):
     return warehouse_available
 
 
-def build_dates(start_day):
+def build_dates(start_day, forecast_days_amount):
     '''Формирует список дат в формате, ожидаемом входными CSV-таблицами.'''
-    date_range = pd.date_range(start=str(start_day)[:10], periods=FORECAST_DAYS + 1).astype(str)
+    date_range = pd.date_range(start=str(start_day)[:10], periods = forecast_days_amount + 1).astype(str)
     return [day[5:7] + '/' + day[8:10] + '/' + day[:4] for day in date_range]
 
 
-def run_pipeline(warehouse_capacity, date):
+def run_pipeline(warehouse_capacity, date, forecast_days_amount):
     '''Запускает полный расчет доступной емкости склада.'''
     print('Calculation started. Please, wait...')
 
@@ -126,11 +123,11 @@ def run_pipeline(warehouse_capacity, date):
     predictions = []
 
     for product_df in products:
-        prediction = predict_sales(FORECAST_DAYS, product_df)
+        prediction = predict_sales(forecast_days_amount, product_df)
         prediction['Predicted Sold Total'] = prediction['Predicted Sold'].cumsum()
         predictions.append(prediction)
 
-    dates = build_dates(products[0]['Day'].max())
+    dates = build_dates(products[0]['Day'].max(), forecast_days_amount)
 
     stocks = calculate_stocks(predictions, dates, sku_list, 'inventory_level_on_' + date + '.csv')
     stocks = include_purchase_orders(stocks, 'supplied_products_by_' + date + '.csv', dates, sku_list)
@@ -145,8 +142,8 @@ def main():
     # Ожидаемые параметры CLI:
     # 1) warehouse_capacity (int) — общая вместимость склада.
     # 2) date (str, формат YYYY-DD-MM) — дата, из которой формируются имена входных файлов.
-    warehouse_capacity, date = parse_args()
-    available_space = run_pipeline(warehouse_capacity, date)
+    warehouse_capacity, date, forecast_days_amount = parse_args()
+    available_space = run_pipeline(warehouse_capacity, date, forecast_days_amount)
     print(available_space)
     available_space.to_csv(OUTPUT_FILENAME, index=False)
 

@@ -64,13 +64,17 @@ Day,Product variant SKU at time of sale,Net items sold
 ## Запуск
 
 ```bash
-python calculate_warehouse_available_cap.py <warehouse_capacity> <date_arg>
+python calculate_warehouse_available_cap.py <warehouse_capacity> <date_arg> <forecast_days_amount>
 ```
+со следующими параметрами
+- `warehouse_capacity` - общее количество места на складе
+- `date_arg` - начальная дата расчета
+- `forecast_days_amount` - количество дней, на которое строится прогноз
 
 Пример:
 
 ```bash
-python calculate_warehouse_available_cap.py 100000 2025-31-12
+python calculate_warehouse_available_cap.py 100000 2025-31-12 1096
 ```
 
 `<date_arg>` ожидается в формате `YYYY-DD-MM`, например `2025-31-12`, и внутри скрипта преобразуется в `12/31/2025`.
