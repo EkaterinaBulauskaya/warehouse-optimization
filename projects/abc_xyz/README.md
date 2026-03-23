@@ -2,7 +2,7 @@
 
 ABC/XYZ-анализ ассортимента: категории по маржинальности (ABC) и по стабильности спроса (XYZ). Итог — матрица категорий по SKU.
 
-Результат сохраняется в файл `2_out_abc_xyz_analysis_results.csv`.
+Результат сохраняется в файл `out_abc_xyz_analysis_results.csv`.
 
 ## Зависимости
 
@@ -16,7 +16,7 @@ python -m pip install pandas scikit-learn
 
 В директории проекта должен лежать:
 
-- `2_in_for_abc_xyz_analysis.csv` — построчная история по SKU.
+- `in_for_abc_xyz_analysis.csv` — построчная история по SKU.
 
 Ожидаемые колонки (как в коде скрипта):
 
@@ -32,11 +32,11 @@ python -m pip install pandas scikit-learn
 ## Запуск
 
 ```bash
-python _2_get_product_abc_xyz_analysis.py
+python get_product_abc_xyz_analysis.py
 ```
 
 ## Выходной файл
 
-- `2_out_abc_xyz_analysis_results.csv`
+- `out_abc_xyz_analysis_results.csv`
 
 Таблица также выводится в консоль.

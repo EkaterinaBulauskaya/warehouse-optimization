@@ -19,8 +19,8 @@ python -m pip install pandas scikit-learn
 
 ```text
 projects/
-  warehouse_cap/   # README, скрипт, notebook, 1_in_*.csv, 1_out_*.csv
-  abc_xyz/           # README, скрипт, notebook, 2_in_*.csv, 2_out_*.csv
+  warehouse_cap/   # README, скрипт, notebook, in_*.csv, out_*.csv
+  abc_xyz/           # README, скрипт, notebook, in_*.csv, out_*.csv
 ```
 
 Подробности по входным/выходным файлам и командам запуска — в README соответствующей папки.

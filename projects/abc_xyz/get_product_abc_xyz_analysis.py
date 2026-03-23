@@ -2,9 +2,9 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 
 
-INPUT_FILENAME = '2_in_for_abc_xyz_analysis.csv'  # Имя CSV-файла с данными для расчета
+INPUT_FILENAME = 'in_for_abc_xyz_analysis.csv'  # Имя CSV-файла с данными для расчета
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе
-OUTPUT_FILENAME = '2_out_abc_xyz_analysis_results.csv' # Имя CSV-файла с результатами расчета
+OUTPUT_FILENAME = 'out_abc_xyz_analysis_results.csv' # Имя CSV-файла с результатами расчета
 
 
 def repair_product(product, sells_col = 'Sold'):

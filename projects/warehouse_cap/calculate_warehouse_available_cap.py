@@ -6,7 +6,7 @@ from sklearn.linear_model import LinearRegression
 
 
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
-OUTPUT_FILENAME = '1_out_warehouse_availiable_space.csv'  # Имя CSV-файла с результатом расчета.
+OUTPUT_FILENAME = 'out_warehouse_availiable_space.csv'  # Имя CSV-файла с результатом расчета.
 
 
 def parse_args():
@@ -119,7 +119,7 @@ def run_pipeline(warehouse_capacity, date, forecast_days_amount):
     '''Запускает полный расчет доступной емкости склада.'''
     print('Calculation started. Please, wait...')
 
-    products, sku_list = prepare_products('1_in_sales_by_' + date + '.csv')
+    products, sku_list = prepare_products('in_sales_by_' + date + '.csv')
     predictions = []
 
     for product_df in products:
@@ -129,8 +129,8 @@ def run_pipeline(warehouse_capacity, date, forecast_days_amount):
 
     dates = build_dates(products[0]['Day'].max(), forecast_days_amount)
 
-    stocks = calculate_stocks(predictions, dates, sku_list, '1_in_inventory_level_on_' + date + '.csv')
-    stocks = include_purchase_orders(stocks, '1_in_supplied_products_by_' + date + '.csv', dates, sku_list)
+    stocks = calculate_stocks(predictions, dates, sku_list, 'in_inventory_level_on_' + date + '.csv')
+    stocks = include_purchase_orders(stocks, 'in_supplied_products_by_' + date + '.csv', dates, sku_list)
 
     available_space = get_available_warehouse_space(stocks, dates, warehouse_capacity)
     available_space.loc[available_space['Space'] > warehouse_capacity, 'Space'] = warehouse_capacity

@@ -6,7 +6,7 @@
 - текущих остатков,
 - запланированных поставок (PO).
 
-Результат сохраняется в файл `1_out_warehouse_availiable_space.csv`.
+Результат сохраняется в файл `out_warehouse_availiable_space.csv`.
 
 ## Зависимости
 
@@ -20,13 +20,13 @@ python -m pip install pandas scikit-learn
 
 В директории проекта должны лежать три CSV:
 
-- `1_in_sales_by_<date>.csv` — история продаж по SKU.
-- `1_in_inventory_level_on_<date>.csv` — стартовые остатки по SKU на дату расчёта.
-- `1_in_supplied_products_by_<date>.csv` — планируемые поставки (PO).
+- `in_sales_by_<date>.csv` — история продаж по SKU.
+- `in_inventory_level_on_<date>.csv` — стартовые остатки по SKU на дату расчёта.
+- `in_supplied_products_by_<date>.csv` — планируемые поставки (PO).
 
 `<date>` в имени файлов — формат `YYYY-MM-DD` (например, `2025-12-31`).
 
-### `1_in_sales_by_<date>.csv`
+### `in_sales_by_<date>.csv`
 
 Обязательные колонки:
 
@@ -40,7 +40,7 @@ python -m pip install pandas scikit-learn
 Day,Product variant SKU at time of sale,Net items sold
 ```
 
-### `1_in_inventory_level_on_<date>.csv`
+### `in_inventory_level_on_<date>.csv`
 
 Обязательные колонки:
 
@@ -55,7 +55,7 @@ Day,Product variant SKU at time of sale,Net items sold
 ,SKU,12/31/2025
 ```
 
-### `1_in_supplied_products_by_<date>.csv`
+### `in_supplied_products_by_<date>.csv`
 
 Обязательные колонки:
 
@@ -74,7 +74,7 @@ Day,Product variant SKU at time of sale,Net items sold
 ## Запуск
 
 ```bash
-python _1_calculate_warehouse_available_cap.py <warehouse_capacity> <date_arg> <forecast_days_amount>
+python calculate_warehouse_available_cap.py <warehouse_capacity> <date_arg> <forecast_days_amount>
 ```
 
 Параметры:
@@ -86,11 +86,11 @@ python _1_calculate_warehouse_available_cap.py <warehouse_capacity> <date_arg> <
 Пример:
 
 ```bash
-python _1_calculate_warehouse_available_cap.py 100000 2025-31-12 1096
+python calculate_warehouse_available_cap.py 100000 2025-31-12 1096
 ```
 
 ## Выходной файл
 
-- `1_out_warehouse_availiable_space.csv`
+- `out_warehouse_availiable_space.csv`
 
 Таблица также выводится в консоль.
