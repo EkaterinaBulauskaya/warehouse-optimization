@@ -25,7 +25,7 @@ python -m pip install pandas scikit-learn
 - `Sold` — продажи за строку.
 - `Price`, `Cost` — цена и себестоимость (для маржи в ABC).
 - `Status` — признак наличия на складе (`1` / `0`); для строк с `0` при необходимости дозаполняются продажи.
-- Первая колонка может быть служебной `Unnamed: 0` (индекс при экспорте из pandas) — она задаётся как `index_col` при чтении CSV.
+- Служебные колонки `Unnamed:*` (индекс при экспорте из pandas) при чтении **отбрасываются**.
 
 Минимум **90** дней истории по SKU, иначе SKU не попадает в расчёт.
 
@@ -33,6 +33,23 @@ python -m pip install pandas scikit-learn
 
 ```bash
 python get_product_abc_xyz_analysis.py
+```
+
+## Тесты
+
+Автотесты: [`tests/test_get_product_abc_xyz_analysis.py`](tests/test_get_product_abc_xyz_analysis.py) (в т.ч. регрессия `repair_product` — `test_repair_product_handles_missing_status_without_indexing_error`).
+
+**Рекомендуется** запускать из **корня репозитория** (так подхватывается [`pytest.ini`](../../pytest.ini)):
+
+```bash
+python -m pip install -r ../../requirements-dev.txt
+python -m pytest projects/abc_xyz/tests -v
+```
+
+Полный прогон всех тестов обоих проектов:
+
+```bash
+python -m pytest -v
 ```
 
 ## Выходной файл

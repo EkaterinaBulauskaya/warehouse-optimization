@@ -94,3 +94,29 @@ python calculate_warehouse_available_cap.py 100000 2025-31-12 1096
 - `out_warehouse_available_space.csv`
 
 Таблица также выводится в консоль.
+
+## Тесты
+
+Автотесты: [`tests/test_calculate_warehouse_available_cap.py`](tests/test_calculate_warehouse_available_cap.py).
+
+**Рекомендуется** запускать из **корня репозитория** (подхватывается [`pytest.ini`](../../pytest.ini)):
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest projects/warehouse_cap/tests -v
+```
+
+Полный прогон тестов **обоих** проектов (`warehouse_cap` и `abc_xyz`):
+
+```bash
+python -m pytest -v
+```
+
+Из директории `projects/warehouse_cap` (альтернатива):
+
+```bash
+python -m pip install -r ../../requirements-dev.txt
+python -m pytest tests -v
+```
+
+Если команда `pytest` не находится (нет в `PATH`), используйте **`python -m pytest`**.

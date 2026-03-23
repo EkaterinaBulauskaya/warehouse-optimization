@@ -24,3 +24,19 @@ projects/
 ```
 
 Подробности по входным/выходным файлам и командам запуска — в README соответствующей папки.
+
+## Тесты
+
+В корне репозитория заданы [`pytest.ini`](pytest.ini) (в т.ч. `pythonpath`) и [`requirements-dev.txt`](requirements-dev.txt) с `pytest`. Запуск **всех** тестов обоих проектов:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -v
+```
+
+Только один проект:
+
+```bash
+python -m pytest projects/warehouse_cap/tests -v
+python -m pytest projects/abc_xyz/tests -v
+```
