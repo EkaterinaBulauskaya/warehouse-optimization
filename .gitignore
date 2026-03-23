@@ -4,3 +4,4 @@ __pycache__/
 .idea/
 
 1_out_warehouse_availiable_space.csv
+2_out_abc_xyz_analysis_results.csv
