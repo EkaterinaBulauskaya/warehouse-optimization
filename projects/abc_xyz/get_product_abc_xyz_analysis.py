@@ -86,7 +86,6 @@ def get_xyz_analysis(products):
     stability_table.loc[stability_table['Coeff_variation'] > 25, 'Category'] = 'Y'
     stability_table.loc[stability_table['Coeff_variation'] > 50, 'Category'] = 'Z'
     stability_table.loc[stability_table['Coeff_variation'] > 100, 'Category'] = 'W'
-    stability_table.sort_values(by = 'Coeff_variation').reset_index(drop = True)
     return stability_table
 
 
