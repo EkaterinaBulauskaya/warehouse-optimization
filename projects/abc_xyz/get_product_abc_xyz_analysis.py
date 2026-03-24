@@ -21,7 +21,9 @@ def repair_product(product, sells_col = 'Sold'):
 
 def prepare_products(filename):
     '''Готовит датасеты по SKU и оставляет только SKU с достаточной историей'''
-    data = pd.read_csv(filename, index_col = 'Unnamed: 0')
+    data = pd.read_csv(filename)
+    # Удаляем служебные колонки индекса, если CSV был сохранен с index=True
+    data = data.loc[:, ~data.columns.str.startswith('Unnamed')]
     data['Day'] = pd.to_datetime(data['Day'])
 
     sku_list = list(data['SKU'].unique())
