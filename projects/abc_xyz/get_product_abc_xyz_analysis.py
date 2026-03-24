@@ -12,8 +12,8 @@ def repair_product(product, sells_col = 'Sold'):
     new_product = product.copy()
     model = LinearRegression()
     model.fit(product[product['Status'] == 1][['Date_ordinal']], product[product][sells_col])
-    repair_product  = product[product['Status'] == 0]['Date_ordinal']
-    predicted_sales = model.predict(pd.DataFrame({'Date_ordinal': repair_product }))
+    repair_ordinals  = product[product['Status'] == 0]['Date_ordinal']
+    predicted_sales = model.predict(pd.DataFrame({'Date_ordinal': repair_ordinals }))
     new_product['Sold'] = new_product['Sold'].astype('float32')
     new_product.loc[new_product['Status'] == 0, 'Sold'] = [round(float(x), 2) if float(x) >= 0 else 0 for x in predicted_sales]
     return new_product
