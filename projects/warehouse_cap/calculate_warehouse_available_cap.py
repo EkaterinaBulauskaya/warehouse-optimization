@@ -6,7 +6,7 @@ from sklearn.linear_model import LinearRegression
 
 
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
-OUTPUT_FILENAME = 'out_warehouse_availiable_space.csv'  # Имя CSV-файла с результатом расчета.
+OUTPUT_FILENAME = 'out_warehouse_available_space.csv'  # Имя CSV-файла с результатом расчета.
 
 
 def parse_args():

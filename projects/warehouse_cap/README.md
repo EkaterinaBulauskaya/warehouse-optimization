@@ -6,7 +6,7 @@
 - текущих остатков,
 - запланированных поставок (PO).
 
-Результат сохраняется в файл `out_warehouse_availiable_space.csv`.
+Результат сохраняется в файл `out_warehouse_available_space.csv`.
 
 ## Зависимости
 
@@ -91,6 +91,6 @@ python calculate_warehouse_available_cap.py 100000 2025-31-12 1096
 
 ## Выходной файл
 
-- `out_warehouse_availiable_space.csv`
+- `out_warehouse_available_space.csv`
 
 Таблица также выводится в консоль.

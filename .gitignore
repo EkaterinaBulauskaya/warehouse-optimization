@@ -3,5 +3,5 @@ __pycache__/
 *.py[cod]
 .idea/
 
-out_warehouse_availiable_space.csv
+out_warehouse_available_space.csv
 out_abc_xyz_analysis_results.csv
