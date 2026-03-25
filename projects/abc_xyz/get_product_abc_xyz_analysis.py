@@ -10,9 +10,11 @@ OUTPUT_FILENAME = 'out_abc_xyz_analysis_results.csv' # Имя CSV-файла с 
 def repair_product(product, sells_col = 'Sold'):
     '''Заполняет нулевые продажи продукта, если его не было на складе'''
     new_product = product.copy()
+    mask_known = product['Status'] == 1
+    mask_missing = product['Status'] == 0
     model = LinearRegression()
-    model.fit(product[product['Status'] == 1][['Date_ordinal']], product[product][sells_col])
-    repair_ordinals  = product[product['Status'] == 0]['Date_ordinal']
+    model.fit(product.loc[mask_known, ['Date_ordinal']], product.loc[mask_known, sells_col])
+    repair_ordinals  = product.loc[mask_missing, 'Date_ordinal']
     predicted_sales = model.predict(pd.DataFrame({'Date_ordinal': repair_ordinals }))
     new_product['Sold'] = new_product['Sold'].astype('float32')
     new_product.loc[new_product['Status'] == 0, 'Sold'] = [round(float(x), 2) if float(x) >= 0 else 0 for x in predicted_sales]
@@ -32,7 +34,7 @@ def prepare_products(filename):
 
     for sku in sku_list:
         sku_data = data[data['SKU'] == sku].reset_index(drop=True)
-        if len(sku_data) >= MIN_HISTORY_DAYS:
+        if len(sku_data[sku_data['Status'] == 1]) >= MIN_HISTORY_DAYS:
             sku_data['Date_ordinal'] = sku_data['Day'].map(pd.Timestamp.toordinal)
             prepared_products.append(sku_data)
             prepared_skus.append(sku)
