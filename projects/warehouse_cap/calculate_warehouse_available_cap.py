@@ -109,6 +109,21 @@ def include_purchase_orders(stocks_df, po_filename, dates, sku_list):
                 stocks_df.loc[sku_list.index(po_sku), dates[j]] += po_qty
     return stocks_df
 
+def extend_daily_sales_to_anchor(daily_df, anchor): 
+    '''Добавляет нулевые продажи до общей опорной даты `anchor` (единый календарь для всех SKU).''' 
+    df = daily_df.copy() 
+    anchor = pd.Timestamp(anchor) 
+    last = pd.Timestamp(df['Day'].max()) 
+    if last >= anchor: 
+        df['Date_ordinal'] = df['Day'].map(pd.Timestamp.toordinal) 
+        return df 
+    extra = pd.date_range(last + timedelta(days=1), anchor, freq='D') 
+    extra_df = pd.DataFrame({'Day': extra, 'Sold': 0.0}) 
+    base = df.drop(columns=['Date_ordinal'], errors='ignore') 
+    out = pd.concat([base, extra_df], ignore_index=True) 
+    out['Date_ordinal'] = out['Day'].map(pd.Timestamp.toordinal) 
+    return out
+
 
 def get_available_warehouse_space(stocks_df, dates, warehouse_capacity):
     '''Рассчитывает свободное место склада по дням.'''
@@ -134,6 +149,7 @@ def run_pipeline(warehouse_capacity, date, forecast_days_amount):
     predictions = []
 
     for product_df in products:
+        product_df = extend_daily_sales_to_anchor(product_df, date)
         prediction = predict_sales(forecast_days_amount, product_df)
         prediction['Predicted Sold Total'] = prediction['Predicted Sold'].cumsum()
         predictions.append(prediction)
