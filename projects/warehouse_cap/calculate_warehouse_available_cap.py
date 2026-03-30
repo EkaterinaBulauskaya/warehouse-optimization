@@ -96,18 +96,32 @@ def normalize_dates(dates_list):
     return normalized_dates
 
 
+def _match_po_day_to_dates(po_day, dates):
+    '''Сопоставляет дату PO с элементом `dates` по календарному дню.'''
+    ts = pd.Timestamp(po_day).normalize()
+    for d in dates:
+        if pd.Timestamp(d).normalize() == ts:
+            return d
+    return None
+
+
 def include_purchase_orders(stocks_df, po_filename, dates, sku_list):
     '''Добавляет поставки PO к остаткам, начиная с даты поступления.'''
+    stocks_df_copy = stocks_df.copy()
     purchase_orders = pd.read_csv(po_filename)
     purchase_orders['Day'] = normalize_dates(purchase_orders['Day'])
     for i in range(len(purchase_orders)):
         po_day = purchase_orders['Day'].iloc[i]
         po_sku = purchase_orders['SKU'].iloc[i]
         po_qty = purchase_orders['Qty'].iloc[i]
-        if po_day in dates:
-            for j in range(dates.index(po_day), len(dates)):
-                stocks_df.loc[sku_list.index(po_sku), dates[j]] += po_qty
-    return stocks_df
+        if po_sku not in sku_list:
+            raise ValueError(f'PO references SKU not in forecast list (unknown SKU): {po_sku!r}')
+        matched = po_day if po_day in dates else _match_po_day_to_dates(po_day, dates)
+        if matched is not None:
+            for j in range(dates.index(matched), len(dates)):
+                stocks_df_copy.loc[sku_list.index(po_sku), dates[j]] += po_qty
+    return stocks_df_copy
+
 
 def extend_daily_sales_to_anchor(daily_df, anchor): 
     '''Добавляет нулевые продажи до общей опорной даты `anchor` (единый календарь для всех SKU).''' 
@@ -169,6 +183,7 @@ def main():
     # Ожидаемые параметры CLI:
     # 1) warehouse_capacity (int) — общая вместимость склада.
     # 2) date (str, формат YYYY-DD-MM) — дата, из которой формируются имена входных файлов.
+    # 3) forecast_days_amount (int) — горизонт прогноза в днях.
     warehouse_capacity, date, forecast_days_amount = parse_args()
     available_space = run_pipeline(warehouse_capacity, date, forecast_days_amount)
     print(available_space)
