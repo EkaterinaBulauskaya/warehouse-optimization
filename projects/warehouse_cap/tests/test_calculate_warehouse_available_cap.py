@@ -96,11 +96,11 @@ def test_run_pipeline_smoke(tmp_path, monkeypatch):
     )
     pallets_df.to_csv(tmp_path / "in_products_for_pallet.csv", index=False)
 
-    result = cap.run_pipeline(warehouse_capacity, date_tag, forecast_days)
+    result, _ = cap.run_pipeline(warehouse_capacity, date_tag, forecast_days)
 
-    assert list(result.columns) == ["Day", "Space"]
+    assert list(result.columns) == ["Day", "Pallets"]
     assert len(result) == forecast_days + 1
-    assert (result["Space"] <= warehouse_capacity).all()
+    assert (result["Pallets"] <= warehouse_capacity).all()
 
 
 def test_predict_sales_starts_day_after_last_sale():
