@@ -2,6 +2,14 @@ import pandas as pd
 from datetime import timedelta
 from sklearn.linear_model import LinearRegression
 import time
+from pathlib import Path
+import sys
+
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECTS_DIR = CURRENT_DIR.parent
+sys.path.insert(0, str(PROJECTS_DIR / "warehouse_cap"))
+sys.path.insert(0, str(PROJECTS_DIR / "abc_xyz"))
+
 import calculate_warehouse_available_cap as cap
 import get_product_abc_xyz_analysis as analysis
 
