@@ -1,5 +1,6 @@
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+from pathlib import Path
 
 
 INPUT_FILENAME = 'in_for_abc_xyz_analysis.csv'  # Имя CSV-файла с данными для расчета
@@ -121,8 +122,16 @@ def merge_analysis_result(margin_table, stability_table, sku_list):
     return result_matrix.sort_values(by = 'Category').reset_index(drop = True)
 
 
+def check_in_files_presence():
+    '''Проверка, существует ли путь и является ли он файлом.'''
+    file_path = Path(INPUT_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_FILENAME}')
+
+
 def run_pipeline():
     '''Запускает расчет категорий продуктов'''
+    check_in_files_presence()
     print('Calculation started...')
     products, sku_list = prepare_products(INPUT_FILENAME)
     
