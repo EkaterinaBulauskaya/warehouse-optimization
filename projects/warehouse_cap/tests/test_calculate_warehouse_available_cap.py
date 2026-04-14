@@ -117,6 +117,44 @@ def test_predict_sales_starts_day_after_last_sale():
     assert out["Predicted Sold"].notna().all()
 
 
+class TestCheckInFilesPresence:
+    def _reset_input_templates(self, monkeypatch):
+        monkeypatch.setattr(cap, "INPUT_INVENTORY_LEVEL_FILENAME", "in_inventory_level_on_{}.csv")
+        monkeypatch.setattr(cap, "INPUT_SALES_FILENAME", "in_sales_by_{}.csv")
+        monkeypatch.setattr(cap, "INPUT_SUPPLIED_PRODUCTS_FILENAME", "in_supplied_products_by_{}.csv")
+        monkeypatch.setattr(cap, "INPUT_PALLETS_FILENAME", "in_products_for_pallet.csv")
+
+    def _create_base_files(self, tmp_path, date_tag):
+        files = {
+            f"in_inventory_level_on_{date_tag}.csv": "SKU,12/31/2025\nSKU-1,100\n",
+            f"in_sales_by_{date_tag}.csv": "Day,Product variant SKU at time of sale,Net items sold\n12/31/2025,SKU-1,1\n",
+            f"in_supplied_products_by_{date_tag}.csv": "Day,SKU,Qty\n",
+            "in_products_for_pallet.csv": "SKU,Units per pallet\nSKU-1,10\n",
+        }
+        for name, content in files.items():
+            (tmp_path / name).write_text(content)
+
+    def test_passes_when_all_required_files_exist(self, tmp_path, monkeypatch):
+        self._reset_input_templates(monkeypatch)
+        monkeypatch.chdir(tmp_path)
+
+        date_tag = "2025-12-31"
+        self._create_base_files(tmp_path, date_tag)
+
+        cap.check_in_files_presence(date_tag)
+
+    def test_raises_when_pallets_file_is_missing(self, tmp_path, monkeypatch):
+        self._reset_input_templates(monkeypatch)
+        monkeypatch.chdir(tmp_path)
+
+        date_tag = "2025-12-31"
+        self._create_base_files(tmp_path, date_tag)
+        (tmp_path / "in_products_for_pallet.csv").unlink()
+
+        with pytest.raises(ValueError, match="in_products_for_pallet.csv"):
+            cap.check_in_files_presence(date_tag)
+
+
 class TestPriority2Issues:
     """PO с SKU вне списка прогноза — явное исключение с понятным текстом."""
 
