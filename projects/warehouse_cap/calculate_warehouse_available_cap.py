@@ -1,10 +1,14 @@
-import sys
+import sys, math
 from datetime import timedelta
 
 import pandas as pd
+from pathlib import Path
 from sklearn.linear_model import LinearRegression
 
-
+INPUT_INVENTORY_LEVEL_FILENAME = 'in_inventory_level_on_{}.csv'
+INPUT_SALES_FILENAME = 'in_sales_by_{}.csv'
+INPUT_SUPPLIED_PRODUCTS_FILENAME = 'in_supplied_products_by_{}.csv'
+INPUT_PALLETS_FILENAME = 'in_products_for_pallet.csv'
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
 OUTPUT_FILENAME = 'out_warehouse_available_space.csv'  # Имя CSV-файла с результатом расчета.
 
@@ -12,7 +16,7 @@ OUTPUT_FILENAME = 'out_warehouse_available_space.csv'  # Имя CSV-файла �
 def parse_args():
     '''Читает аргументы CLI и нормализует дату для имен входных файлов.'''
     if len(sys.argv) != 4:
-        raise ValueError('Usage: python calculate_warehouse_available_cap.py <warehouse_capacity> <date>')
+        raise ValueError('Usage: python calculate_warehouse_available_cap.py <warehouse_capacity> <in_file_date> <forecast_days_amount>')
     warehouse_capacity = int(sys.argv[1])
     raw_date = sys.argv[2]
     normalized_date = raw_date[:4] + '-' + raw_date[8:10] + '-' + raw_date[5:7]
@@ -122,8 +126,17 @@ def include_purchase_orders(stocks_df, po_filename, dates, sku_list):
             raise ValueError(f'PO references SKU not in forecast list (unknown SKU): {po_sku!r}')
         matched = po_day if po_day in dates else _match_po_day_to_dates(po_day, dates)
         if matched is not None:
-            for j in range(dates.index(matched), len(dates)):
-                stocks_df_copy.loc[sku_list.index(po_sku), dates[j]] += po_qty
+            sku_index = sku_list.index(po_sku)
+            matched_index = dates.index(matched)
+            sku_qty_at_po_arrival = stocks_df_copy.loc[sku_index, dates[matched_index]]
+            if sku_qty_at_po_arrival < 0:
+                for j in range(matched_index, len(dates)):
+                    stocks_df_copy.loc[sku_index, dates[j]] += po_qty - sku_qty_at_po_arrival
+            else:
+                for j in range(matched_index, len(dates)):
+                    stocks_df_copy.loc[sku_index, dates[j]] += po_qty
+    for date in dates:
+        stocks_df_copy.loc[stocks_df_copy[date] < 0, date] = 0
     return stocks_df_copy
 
 
@@ -143,13 +156,22 @@ def extend_daily_sales_to_anchor(daily_df, anchor):
     return out
 
 
-def get_available_warehouse_space(stocks_df, dates, warehouse_capacity):
+def get_available_warehouse_space(stocks_df, dates, warehouse_capacity, pallets_filename):
     '''Рассчитывает свободное место склада по дням.'''
     warehouse_available = pd.DataFrame()
     warehouse_available['Day'] = dates
-    warehouse_available['Space'] = [
-        int(warehouse_capacity - stocks_df.loc[stocks_df[dates[i]] > 0, dates[i]].sum()) for i in range(len(dates))
-    ]
+
+    pallet_data = pd.read_csv(pallets_filename)
+    units_per_pallet = []
+    for sku in stocks_df['SKU']:
+        units_per_pallet.append(pallet_data.loc[pallet_data['SKU'] == sku, 'Units per pallet'])
+    pallets_available = []
+    for date in dates:
+        daily_pallets = [math.ceil(float((stocks_df[date][i] / units_per_pallet[i]).iloc[0])) for i in range(len(stocks_df))]
+        pallets_available.append(
+            round(warehouse_capacity - sum(daily_pallets), 2)
+        )
+    warehouse_available['Pallets'] = pallets_available
     return warehouse_available
 
 
@@ -159,27 +181,58 @@ def build_dates(start_day, forecast_days_amount):
     return [day[5:7] + '/' + day[8:10] + '/' + day[:4] for day in date_range]
 
 
-def run_pipeline(warehouse_capacity, date, forecast_days_amount):
+def fill_in_file_templates(in_file_date):
+    global INPUT_INVENTORY_LEVEL_FILENAME
+    INPUT_INVENTORY_LEVEL_FILENAME = INPUT_INVENTORY_LEVEL_FILENAME.format(in_file_date)
+    global INPUT_SALES_FILENAME
+    INPUT_SALES_FILENAME = INPUT_SALES_FILENAME.format(in_file_date)
+    global INPUT_SUPPLIED_PRODUCTS_FILENAME
+    INPUT_SUPPLIED_PRODUCTS_FILENAME = INPUT_SUPPLIED_PRODUCTS_FILENAME.format(in_file_date)
+
+
+def check_in_files_presence(in_file_date):
+    '''Проверка, существует ли путь и является ли он файлом.'''
+    fill_in_file_templates(in_file_date)
+
+    file_path = Path(INPUT_INVENTORY_LEVEL_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_INVENTORY_LEVEL_FILENAME}')
+    
+    file_path = Path(INPUT_PALLETS_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_PALLETS_FILENAME}')
+    
+    file_path = Path(INPUT_SALES_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_SALES_FILENAME}')
+    
+    file_path = Path(INPUT_SUPPLIED_PRODUCTS_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_SUPPLIED_PRODUCTS_FILENAME}')
+
+
+def run_pipeline(warehouse_capacity, in_file_date, forecast_days_amount):
     '''Запускает полный расчет доступной емкости склада.'''
+    check_in_files_presence(in_file_date)
     print('Calculation started. Please, wait...')
 
-    products, sku_list = prepare_products('in_sales_by_' + date + '.csv')
+    products, sku_list = prepare_products(INPUT_SALES_FILENAME)
     predictions = []
 
     for product_df in products:
-        product_df = extend_daily_sales_to_anchor(product_df, date)
+        product_df = extend_daily_sales_to_anchor(product_df, in_file_date)
         prediction = predict_sales(forecast_days_amount, product_df)
         prediction['Predicted Sold Total'] = prediction['Predicted Sold'].cumsum()
         predictions.append(prediction)
 
     dates = build_dates(products[0]['Day'].max(), forecast_days_amount)
 
-    stocks = calculate_stocks(predictions, dates, sku_list, 'in_inventory_level_on_' + date + '.csv')
-    stocks = include_purchase_orders(stocks, 'in_supplied_products_by_' + date + '.csv', dates, sku_list)
+    stocks = calculate_stocks(predictions, dates, sku_list, INPUT_INVENTORY_LEVEL_FILENAME)
+    stocks = include_purchase_orders(stocks, INPUT_SUPPLIED_PRODUCTS_FILENAME, dates, sku_list)
 
-    available_space = get_available_warehouse_space(stocks, dates, warehouse_capacity)
-    available_space.loc[available_space['Space'] > warehouse_capacity, 'Space'] = warehouse_capacity
-    return available_space
+    available_space = get_available_warehouse_space(stocks, dates, warehouse_capacity, INPUT_PALLETS_FILENAME)
+    available_space.loc[available_space['Pallets'] > warehouse_capacity, 'Pallets'] = warehouse_capacity
+    return available_space, stocks
 
 
 def main():
@@ -188,8 +241,8 @@ def main():
     # 1) warehouse_capacity (int) — общая вместимость склада.
     # 2) date (str, формат YYYY-DD-MM) — дата, из которой формируются имена входных файлов.
     # 3) forecast_days_amount (int) — горизонт прогноза в днях.
-    warehouse_capacity, date, forecast_days_amount = parse_args()
-    available_space = run_pipeline(warehouse_capacity, date, forecast_days_amount)
+    warehouse_capacity, in_file_date, forecast_days_amount = parse_args()
+    available_space, _ = run_pipeline(warehouse_capacity, in_file_date, forecast_days_amount)
     print(available_space)
     available_space.to_csv(OUTPUT_FILENAME, index=False)
 

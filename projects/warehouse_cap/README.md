@@ -1,6 +1,6 @@
 # warehouse_cap
 
-Расчёт свободного места на складе по дням на основе:
+Расчёт свободного места на складе в паллетах по дням на основе:
 
 - истории продаж,
 - текущих остатков,
@@ -24,13 +24,14 @@ python -m pip install pandas scikit-learn
 
 В директории проекта должны лежать три CSV:
 
-- `in_sales_by_<date>.csv` — история продаж по SKU.
-- `in_inventory_level_on_<date>.csv` — стартовые остатки по SKU на дату расчёта.
-- `in_supplied_products_by_<date>.csv` — планируемые поставки (PO).
+- `in_sales_by_<in_file_date>.csv` — история продаж по SKU.
+- `in_products_for_pallet.csv` - данные по количеству единиц товара в паллете.
+- `in_inventory_level_on_<in_file_date>.csv` — стартовые остатки по SKU на дату расчёта.
+- `in_supplied_products_by_<in_file_date>.csv` — планируемые поставки (PO).
 
-`<date>` в имени файлов — формат `YYYY-MM-DD` (например, `2025-12-31`).
+`<in_file_date>` в имени файлов — формат `YYYY-MM-DD` (например, `2025-12-31`).
 
-### `in_sales_by_<date>.csv`
+### `in_sales_by_<in_file_date>.csv`
 
 Обязательные колонки:
 
@@ -44,7 +45,20 @@ python -m pip install pandas scikit-learn
 Day,Product variant SKU at time of sale,Net items sold
 ```
 
-### `in_inventory_level_on_<date>.csv`
+### `in_products_for_pallet.csv`
+
+Обязательные колонки:
+
+- `SKU` — идентификатор SKU.
+- `Units per pallet` — количество единиц единиц этого товара в паллете.
+
+Пример заголовка:
+
+```csv
+SKU,Units per pallet
+```
+
+### `in_inventory_level_on_<in_file_date>.csv`
 
 Обязательные колонки:
 
@@ -59,7 +73,7 @@ Day,Product variant SKU at time of sale,Net items sold
 ,SKU,12/31/2025
 ```
 
-### `in_supplied_products_by_<date>.csv`
+### `in_supplied_products_by_<in_file_date>.csv`
 
 Обязательные колонки:
 
@@ -78,19 +92,19 @@ Day,Product variant SKU at time of sale,Net items sold
 ## Запуск
 
 ```bash
-python calculate_warehouse_available_cap.py <warehouse_capacity> <date_arg> <forecast_days_amount>
+python calculate_warehouse_available_cap.py <warehouse_capacity> <in_file_date> <forecast_days_amount>
 ```
 
 Параметры:
 
-- `warehouse_capacity` — общее количество места на складе.
-- `date_arg` — начальная дата расчёта в формате `YYYY-DD-MM` (внутри скрипта преобразуется в имена файлов и даты вида `YYYY-MM-DD` / `MM/DD/YYYY`).
+- `warehouse_capacity` — общее количество места на складе (в паллетах).
+- `in_file_date` — начальная дата расчёта в формате `YYYY-DD-MM` (внутри скрипта преобразуется в имена файлов и даты вида `YYYY-MM-DD` / `MM/DD/YYYY`).
 - `forecast_days_amount` — горизонт прогноза в днях.
 
 Пример:
 
 ```bash
-python calculate_warehouse_available_cap.py 100000 2025-31-12 1096
+python calculate_warehouse_available_cap.py 500 2025-31-12 1096
 ```
 
 ## Выходной файл
