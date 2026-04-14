@@ -88,6 +88,13 @@ def test_run_pipeline_smoke(tmp_path, monkeypatch):
 
     po_df = pd.DataFrame(columns=["Day", "SKU", "Qty"])
     po_df.to_csv(tmp_path / f"in_supplied_products_by_{date_tag}.csv", index=False)
+    pallets_df = pd.DataFrame(
+        {
+            "SKU": [sku],
+            "Units per pallet": [10],
+        }
+    )
+    pallets_df.to_csv(tmp_path / "in_products_for_pallet.csv", index=False)
 
     result = cap.run_pipeline(warehouse_capacity, date_tag, forecast_days)
 
