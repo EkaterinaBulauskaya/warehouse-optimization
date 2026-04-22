@@ -5,12 +5,12 @@ import pandas as pd
 from pathlib import Path
 from sklearn.linear_model import LinearRegression
 
-INPUT_INVENTORY_LEVEL_FILENAME = 'in_inventory_level_on_{}.csv'
-INPUT_SALES_FILENAME = 'in_sales_by_{}.csv'
-INPUT_SUPPLIED_PRODUCTS_FILENAME = 'in_supplied_products_by_{}.csv'
-INPUT_PALLETS_FILENAME = 'in_products_for_pallet.csv'
+INPUT_INVENTORY_LEVEL_FILENAME = 'in/in_inventory_level_on_{}.csv'
+INPUT_SALES_FILENAME = 'in/in_sales_by_{}.csv'
+INPUT_SUPPLIED_PRODUCTS_FILENAME = 'in/in_supplied_products_by_{}.csv'
+INPUT_PALLETS_FILENAME = 'in/in_products_for_pallet.csv'
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
-OUTPUT_FILENAME = 'out_warehouse_available_space.csv'  # Имя CSV-файла с результатом расчета.
+OUTPUT_FILENAME = 'out/out_warehouse_available_space.csv'  # Имя CSV-файла с результатом расчета.
 
 
 def parse_args():
@@ -244,6 +244,7 @@ def main():
     warehouse_capacity, in_file_date, forecast_days_amount = parse_args()
     available_space, _ = run_pipeline(warehouse_capacity, in_file_date, forecast_days_amount)
     print(available_space)
+    Path('out').mkdir(parents=True, exist_ok=True)
     available_space.to_csv(OUTPUT_FILENAME, index=False)
 
 

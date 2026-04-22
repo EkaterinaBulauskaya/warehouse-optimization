@@ -62,6 +62,7 @@ def test_fill_missing_dates_fills_gap_with_zero():
 
 def test_run_pipeline_smoke(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    (tmp_path / "in").mkdir()
 
     date_tag = "2025-12-31"
     forecast_days = 5
@@ -76,7 +77,7 @@ def test_run_pipeline_smoke(tmp_path, monkeypatch):
             "Net items sold": [1] * len(sales_days),
         }
     )
-    sales_df.to_csv(tmp_path / f"in_sales_by_{date_tag}.csv", index=False)
+    sales_df.to_csv(tmp_path / "in" / f"in_sales_by_{date_tag}.csv", index=False)
 
     inventory_df = pd.DataFrame(
         {
@@ -84,17 +85,17 @@ def test_run_pipeline_smoke(tmp_path, monkeypatch):
             "12/31/2025": [200],
         }
     )
-    inventory_df.to_csv(tmp_path / f"in_inventory_level_on_{date_tag}.csv", index=False)
+    inventory_df.to_csv(tmp_path / "in" / f"in_inventory_level_on_{date_tag}.csv", index=False)
 
     po_df = pd.DataFrame(columns=["Day", "SKU", "Qty"])
-    po_df.to_csv(tmp_path / f"in_supplied_products_by_{date_tag}.csv", index=False)
+    po_df.to_csv(tmp_path / "in" / f"in_supplied_products_by_{date_tag}.csv", index=False)
     pallets_df = pd.DataFrame(
         {
             "SKU": [sku],
             "Units per pallet": [10],
         }
     )
-    pallets_df.to_csv(tmp_path / "in_products_for_pallet.csv", index=False)
+    pallets_df.to_csv(tmp_path / "in" / "in_products_for_pallet.csv", index=False)
 
     result, _ = cap.run_pipeline(warehouse_capacity, date_tag, forecast_days)
 
@@ -119,12 +120,13 @@ def test_predict_sales_starts_day_after_last_sale():
 
 class TestCheckInFilesPresence:
     def _reset_input_templates(self, monkeypatch):
-        monkeypatch.setattr(cap, "INPUT_INVENTORY_LEVEL_FILENAME", "in_inventory_level_on_{}.csv")
-        monkeypatch.setattr(cap, "INPUT_SALES_FILENAME", "in_sales_by_{}.csv")
-        monkeypatch.setattr(cap, "INPUT_SUPPLIED_PRODUCTS_FILENAME", "in_supplied_products_by_{}.csv")
-        monkeypatch.setattr(cap, "INPUT_PALLETS_FILENAME", "in_products_for_pallet.csv")
+        monkeypatch.setattr(cap, "INPUT_INVENTORY_LEVEL_FILENAME", "in/in_inventory_level_on_{}.csv")
+        monkeypatch.setattr(cap, "INPUT_SALES_FILENAME", "in/in_sales_by_{}.csv")
+        monkeypatch.setattr(cap, "INPUT_SUPPLIED_PRODUCTS_FILENAME", "in/in_supplied_products_by_{}.csv")
+        monkeypatch.setattr(cap, "INPUT_PALLETS_FILENAME", "in/in_products_for_pallet.csv")
 
     def _create_base_files(self, tmp_path, date_tag):
+        (tmp_path / "in").mkdir(exist_ok=True)
         files = {
             f"in_inventory_level_on_{date_tag}.csv": "SKU,12/31/2025\nSKU-1,100\n",
             f"in_sales_by_{date_tag}.csv": "Day,Product variant SKU at time of sale,Net items sold\n12/31/2025,SKU-1,1\n",
@@ -132,7 +134,7 @@ class TestCheckInFilesPresence:
             "in_products_for_pallet.csv": "SKU,Units per pallet\nSKU-1,10\n",
         }
         for name, content in files.items():
-            (tmp_path / name).write_text(content)
+            (tmp_path / "in" / name).write_text(content)
 
     def test_passes_when_all_required_files_exist(self, tmp_path, monkeypatch):
         self._reset_input_templates(monkeypatch)
@@ -149,7 +151,7 @@ class TestCheckInFilesPresence:
 
         date_tag = "2025-12-31"
         self._create_base_files(tmp_path, date_tag)
-        (tmp_path / "in_products_for_pallet.csv").unlink()
+        (tmp_path / "in" / "in_products_for_pallet.csv").unlink()
 
         with pytest.raises(ValueError, match="in_products_for_pallet.csv"):
             cap.check_in_files_presence(date_tag)
@@ -189,6 +191,7 @@ class TestPriority3Issues:
         monkeypatch.chdir(tmp_path)
         date_tag = "2025-12-31"
         forecast_days = 3
+        (tmp_path / "in").mkdir()
 
         early_end = pd.date_range(end="2025-12-20", periods=95, freq="D")
         late_end = pd.date_range(end="2025-12-31", periods=95, freq="D")
@@ -210,20 +213,20 @@ class TestPriority3Issues:
                     "Net items sold": 1,
                 }
             )
-        pd.DataFrame(rows).to_csv(tmp_path / f"in_sales_by_{date_tag}.csv", index=False)
+        pd.DataFrame(rows).to_csv(tmp_path / "in" / f"in_sales_by_{date_tag}.csv", index=False)
 
         pd.DataFrame(
             {
                 "SKU": ["EARLY", "LATE"],
                 "12/31/2025": [50, 60],
             }
-        ).to_csv(tmp_path / f"in_inventory_level_on_{date_tag}.csv", index=False)
+        ).to_csv(tmp_path / "in" / f"in_inventory_level_on_{date_tag}.csv", index=False)
 
         pd.DataFrame(columns=["Day", "SKU", "Qty"]).to_csv(
-            tmp_path / f"in_supplied_products_by_{date_tag}.csv", index=False
+            tmp_path / "in" / f"in_supplied_products_by_{date_tag}.csv", index=False
         )
 
-        products, sku_list = cap.prepare_products(tmp_path / f"in_sales_by_{date_tag}.csv")
+        products, sku_list = cap.prepare_products(tmp_path / "in" / f"in_sales_by_{date_tag}.csv")
         assert len(products) == 2
         assert sku_list[0] == "EARLY"
 

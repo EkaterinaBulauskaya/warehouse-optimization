@@ -3,22 +3,16 @@ from datetime import timedelta
 from sklearn.linear_model import LinearRegression
 import time
 from pathlib import Path
-import sys
-
-CURRENT_DIR = Path(__file__).resolve().parent
-PROJECTS_DIR = CURRENT_DIR.parent
-sys.path.insert(0, str(PROJECTS_DIR / "warehouse_cap"))
-sys.path.insert(0, str(PROJECTS_DIR / "abc_xyz"))
 
 import calculate_warehouse_available_cap as cap
 import get_product_abc_xyz_analysis as analysis
 
-INPUT_PALLETS_FILENAME = 'in_products_for_pallet.csv'
-INPUT_MOQ_FILENAME = 'in_products_MOQ.csv'
-INPUT_FRESHNESS_WINDOW_FILENAME = 'in_freshness_window_data.csv'
-INPUT_SALES_FILENAME_TEMPLATE = 'in_sales_by_{}.csv'
+INPUT_PALLETS_FILENAME = 'in/in_products_for_pallet.csv'
+INPUT_MOQ_FILENAME = 'in/in_products_MOQ.csv'
+INPUT_FRESHNESS_WINDOW_FILENAME = 'in/in_freshness_window_data.csv'
+INPUT_SALES_FILENAME_TEMPLATE = 'in/in_sales_by_{}.csv'
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
-OUTPUT_FILENAME = 'out_order_recommendations.csv'  # Имя CSV-файла с результатом расчета.
+OUTPUT_FILENAME = 'out/out_order_recommendations.csv'  # Имя CSV-файла с результатом расчета.
 
 
 def fill_filename_templates(date):
@@ -248,6 +242,7 @@ def run_pipeline():
 def main():
     recommendations = run_pipeline()
     print(recommendations)
+    Path('out').mkdir(parents=True, exist_ok=True)
     recommendations.to_csv(OUTPUT_FILENAME, index=False)
 
 

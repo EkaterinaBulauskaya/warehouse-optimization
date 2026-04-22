@@ -3,9 +3,9 @@ from sklearn.linear_model import LinearRegression
 from pathlib import Path
 
 
-INPUT_FILENAME = 'in_for_abc_xyz_analysis.csv'  # Имя CSV-файла с данными для расчета
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе
-OUTPUT_FILENAME = 'out_abc_xyz_analysis_results.csv' # Имя CSV-файла с результатами расчета
+INPUT_FILENAME = 'in/in_for_abc_xyz_analysis.csv'  # Имя CSV-файла с данными для расчета
+OUTPUT_FILENAME = 'out/out_abc_xyz_analysis_results.csv' # Имя CSV-файла с результатами расчета
 
 
 def repair_product(product, sells_col = 'Sold'):
@@ -146,6 +146,7 @@ def main():
     '''Точка входа: выполняет расчет и сохраняет результат'''
     abc_xyz_matrix = run_pipeline()
     print(abc_xyz_matrix)
+    Path('out').mkdir(parents=True, exist_ok=True)
     abc_xyz_matrix.to_csv(OUTPUT_FILENAME, index=False)
 
 
