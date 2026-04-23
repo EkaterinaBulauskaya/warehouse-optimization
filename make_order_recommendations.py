@@ -16,11 +16,13 @@ OUTPUT_FILENAME = 'out/out_order_recommendations.csv'  # Имя CSV-файла �
 
 
 def fill_filename_templates(date):
+    '''Заполняет шаблоны имен файлов.'''
     global INPUT_SALES_FILENAME_TEMPLATE
     INPUT_SALES_FILENAME_TEMPLATE = INPUT_SALES_FILENAME_TEMPLATE.format(date)
 
 
 def prepare_data():
+    '''Читает аргументы, запускает подпроекты, заполняет шаблоны.'''
     warehouse_capacity, date, forecast_days_amount = cap.parse_args()
     available_space, stocks = cap.run_pipeline(warehouse_capacity, date, forecast_days_amount)
     abc_xyz_analysis_result = analysis.run_pipeline()
@@ -29,6 +31,7 @@ def prepare_data():
 
 
 def get_detes_list(stocks):
+    '''Дает список всех дат в таблице stocks.'''
     dates_list = list(stocks.keys())
     dates_list.remove('SKU')
     dates_list = pd.to_datetime(dates_list).sort_values()
@@ -37,6 +40,7 @@ def get_detes_list(stocks):
 
 
 def get_products_stockout_date(stocks, recommendations):
+    '''Рассчитывает дату, когда продукт закончится на складе.'''
     dates_list = get_detes_list(stocks)
     stockout = []
     for sku in recommendations['SKU']:
@@ -50,6 +54,7 @@ def get_products_stockout_date(stocks, recommendations):
 
 
 def get_valid_category_products(products_df):
+    '''Оставляет только категории продуктов, подходящие для дальнейшего анализа.'''
     valid_categories = ['AX', 'AY', 'BX', 'AZ', 'BY', 'CX', 'BZ', 'CY', 'CZ']
     products_df_copy = products_df.copy()
     products_df_copy['Valid_categories'] = [category in valid_categories for category in list(products_df['Category'])]
@@ -102,6 +107,7 @@ def predict_sales(days_ahead, last_date, sales_df, source_col='Sold', result_col
 
 
 def predict_number_of_unit_sold(recommendations):
+    '''Расчитывает общее количество товара, что может быть продано до истечения срока годности'''
     predicted_units_sold = []
     products_sales_data = prepare_sales_data(INPUT_SALES_FILENAME_TEMPLATE, list(recommendations['SKU']))
     for i in range(len(recommendations)):
@@ -116,6 +122,7 @@ def predict_number_of_unit_sold(recommendations):
 
 
 def get_recommendations(recommendations, categories, available_space):
+    '''Создает и заполняет колонки рекомендаций'''
     MOQ = pd.read_csv(INPUT_MOQ_FILENAME)
     MOQ_data = []
     for sku in recommendations['SKU']:
@@ -147,6 +154,7 @@ def get_category_recommendations(recommendations, category, available_space):
     category_products = recommendations.loc[recommendations['Category'] == category].copy().reset_index(drop = True)
     category_products = category_products.sort_values(by = 'Stockout')
 
+    '''Заполняет некоторые колонки рекомендаций определенной категории продуктов'''
     available_space['Day'] = available_space['Day'].astype(str)
     # print('***', len(category_products))
     for i in range(len(category_products)):
@@ -228,6 +236,7 @@ def get_category_recommendations(recommendations, category, available_space):
 
 
 def run_pipeline():
+    '''Запускает расчет рекомендаций по заказу продуктов.'''
     t0 = time.time()
     print('Calculation started. Please, wait...')
     available_space, stocks, abc_xyz_analysis_result = prepare_data()
@@ -240,6 +249,7 @@ def run_pipeline():
 
 
 def main():
+    '''Точка входа: читает аргументы, выполняет расчет и сохраняет результат.'''
     recommendations = run_pipeline()
     print(recommendations)
     Path('out').mkdir(parents=True, exist_ok=True)
