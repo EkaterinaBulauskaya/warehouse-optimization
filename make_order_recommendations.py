@@ -300,6 +300,25 @@ def get_category_recommendations(recommendations, category, available_space):
     return recommendations, available_space
 
 
+def check_in_files_presence(in_file_date):
+    '''Проверка, существует ли путь и является ли он файлом.'''
+    fill_filename_template(in_file_date)
+
+    file_path = Path(INPUT_PALLETS_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_PALLETS_FILENAME}')
+
+    file_path = Path(INPUT_MOQ_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_MOQ_FILENAME}')
+
+    file_path = Path(INPUT_FRESHNESS_WINDOW_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_FRESHNESS_WINDOW_FILENAME}')
+
+    file_path = Path(INPUT_SALES_FILENAME_TEMPLATE)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_SALES_FILENAME_TEMPLATE}')
 def run_pipeline():
     '''Запускает расчет рекомендаций по заказу продуктов.'''
     t0 = time.time()
