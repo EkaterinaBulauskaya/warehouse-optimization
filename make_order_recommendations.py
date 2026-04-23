@@ -150,88 +150,153 @@ def get_recommendations(recommendations, categories, available_space):
     return recommendations
 
 
-def get_category_recommendations(recommendations, category, available_space):
-    category_products = recommendations.loc[recommendations['Category'] == category].copy().reset_index(drop = True)
-    category_products = category_products.sort_values(by = 'Stockout')
+def prepare_category_products(recommendations, category):
+    '''Отбирает продукты заданной категории, сортирует их по дате stockout.'''
+    category_products = (
+        recommendations.loc[recommendations['Category'] == category]
+        .copy()
+        .reset_index(drop=True)
+    )
+    return category_products.sort_values(by='Stockout')
 
-    '''Заполняет некоторые колонки рекомендаций определенной категории продуктов'''
-    available_space['Day'] = available_space['Day'].astype(str)
-    # print('***', len(category_products))
-    for i in range(len(category_products)):
-        stockout = category_products.loc[i, 'Stockout']
-        if stockout is not None:
-            
-            pallets_available = list(available_space.loc[available_space['Day'] == stockout, 'Pallets'])[0]
-            MOQ_pallets = category_products.loc[i, 'MOQ_pallets']
-            predicted_pallets_sold = category_products.loc[i, 'Predicted_pallets_sold']
 
-            if pallets_available >= MOQ_pallets:
-                if pallets_available >= predicted_pallets_sold:
-                    category_products.loc[i, 'Final_pallets'] = predicted_pallets_sold
-                else:
-                    category_products.loc[i, 'Final_pallets'] = pallets_available
-                category_products.loc[i, 'Status'] = 'Normal'
+def allocate_normal_case(row, pallets_available):
+    '''Обрабатывает случай, когда места на складе достаточно для заказа.'''
+    MOQ = row['MOQ_pallets']
+    predicted = row['Predicted_pallets_sold']
 
-            else:
-                processed_category_products = category_products.iloc[:i].copy()
-                pallets_available_stockpile = processed_category_products['MOQ_pallets'] - processed_category_products['Final_pallets']
-                processed_category_products['Pallets_available_stockpile'] = pallets_available_stockpile
-                processed_category_products = processed_category_products.sort_values(
-                        by = 'Pallets_available_stockpile', ascending = False)
-                processed_category_products = processed_category_products.reset_index(drop = True)
-                pallets_total_available_stockpile = pallets_available_stockpile.sum()
-                
-                if pallets_available + pallets_total_available_stockpile >= MOQ_pallets:
-                    category_products.loc[i, 'Final_pallets'] = pallets_available
-                    j = 0
-                    while category_products.loc[i, 'Final_pallets'] < MOQ_pallets:
-                        if processed_category_products.loc[j % i, 'Pallets_available_stockpile'] > 0:
-                            processed_category_products.loc[j % i, 'Pallets_available_stockpile'] -= 1
-                            category_products.loc[i, 'Final_pallets'] += 1
-                        j += 1
-                    category_products.loc[i, 'Status'] = 'Reallocated'
-                else:
-                    required_pallets_available = MOQ_pallets - pallets_total_available_stockpile
-                    if pallets_available < 0:
-                        required_pallets_available -= pallets_available
-                    stockout_index = list(available_space.loc[available_space['Day'] == stockout].index)[0]
-                    available_space_after_stockout = available_space.iloc[stockout_index + 1:]
-                    suitable_available_space = available_space_after_stockout.loc[available_space_after_stockout['Pallets'] >= required_pallets_available].copy()
-                    if len(suitable_available_space) > 0:
-                        suitable_index = sorted(list(suitable_available_space.index))[0]
-                        fullfillment_date = suitable_available_space.loc[suitable_index, 'Day']
+    if pallets_available >= predicted:
+        final = predicted
+    else:
+        final = pallets_available
 
-                        suitable_pallets_available_stockpile = suitable_available_space.loc[suitable_index, 'Pallets']
-                        category_products.loc[i, 'Final_pallets'] = pallets_available + suitable_pallets_available_stockpile
+    return final, 'Normal'
 
-                        j = 0
-                        while category_products.loc[i, 'Final_pallets'] < MOQ_pallets:
-                            if processed_category_products.loc[j % i, 'Pallets_available_stockpile'] > 0:
-                                processed_category_products.loc[j % i, 'Pallets_available_stockpile'] -= 1
-                                category_products.loc[i, 'Final_pallets'] += 1
-                            j += 1
-                        category_products.loc[i, 'Fullfillment_date'] = fullfillment_date
-                        category_products.loc[i, 'Status'] = 'PostponedCapacity'
-                    else:
-                        category_products.loc[i, 'Final_pallets'] = 0
-                        category_products.loc[i, 'Fullfillment_date'] = None
-                        category_products.loc[i, 'Status'] = 'BlockedByWarehouse'
-            
-            final_pallets = category_products.loc[i, 'Final_pallets']
-            units_per_pallet = category_products.loc[i, 'Units_per_pallet']
-            category_products.loc[i, 'Final_units'] = final_pallets * units_per_pallet
 
-            stockout_index = list(available_space.loc[available_space['Day'] == stockout].index)[0]
-            available_space.loc[stockout_index:, 'Pallets'] -= category_products.loc[i, 'Final_pallets']
+def reallocate_from_stockpile(category_products, i, pallets_available):
+    '''Обрабатывает случай, когда недостающее место можно "забрать" у уже обработанных продуктов.'''
+    processed = category_products.iloc[:i].copy()
+    processed['Pallets_available_stockpile'] = (
+        processed['MOQ_pallets'] - processed['Final_pallets']
+    )
 
+    processed = processed.sort_values(
+        by='Pallets_available_stockpile', ascending=False
+    ).reset_index(drop=True)
+
+    total_stockpile = processed['Pallets_available_stockpile'].sum()
+    MOQ = category_products.loc[i, 'MOQ_pallets']
+
+    if pallets_available + total_stockpile < MOQ:
+        return None  # недостаточно для реаллокации
+
+    final = pallets_available
+    j = 0
+    while final < MOQ:
+        idx = j % i
+        if processed.loc[idx, 'Pallets_available_stockpile'] > 0:
+            processed.loc[idx, 'Pallets_available_stockpile'] -= 1
+            final += 1
+        j += 1
+    return final, 'Reallocated'
+
+
+def postpone_or_block(category_products, i, pallets_available, available_space, stockout):
+    '''Обрабатывает случай, когда дата заказа преносится из-за нехватки места.'''
+    MOQ = category_products.loc[i, 'MOQ_pallets']
+
+    processed = category_products.iloc[:i].copy()
+    processed['Pallets_available_stockpile'] = (
+        processed['MOQ_pallets'] - processed['Final_pallets']
+    )
+    total_stockpile = processed['Pallets_available_stockpile'].sum()
+
+    required = MOQ - total_stockpile
+    if pallets_available < 0:
+        required -= pallets_available
+
+    stockout_index = list(available_space.loc[available_space['Day'] == stockout].index)[0]
+    future_space = available_space.iloc[stockout_index + 1:]
+    suitable = future_space.loc[future_space['Pallets'] >= required]
+    if len(suitable) == 0:
+        return 0, None, 'BlockedByWarehouse'
+
+    suitable_index = sorted(list(suitable.index))[0]
+    fullfillment_date = suitable.loc[suitable_index, 'Day']
+    extra_pallets = suitable.loc[suitable_index, 'Pallets']
+
+    final = pallets_available + extra_pallets
+    j = 0
+    while final < MOQ:
+        idx = j % i
+        if processed.loc[idx, 'Pallets_available_stockpile'] > 0:
+            processed.loc[idx, 'Pallets_available_stockpile'] -= 1
+            final += 1
+        j += 1
+
+    return final, fullfillment_date, 'PostponedCapacity'
+
+
+def update_available_space(available_space, stockout, used_pallets):
+    '''Обновляет данные о доступном месте на складе'''
+    stockout_index = list(available_space.loc[available_space['Day'] == stockout].index)[0]
+    available_space.loc[stockout_index:, 'Pallets'] -= used_pallets
+    return available_space
+
+
+def process_single_product(category_products, i, available_space):
+    '''Обрабатывает один продукт из категории'''
+    stockout = category_products.loc[i, 'Stockout']
+
+    if stockout is None:
+        category_products.loc[i, 'Final_pallets'] = 0
+        category_products.loc[i, 'Final_units'] = 0
+        category_products.loc[i, 'Status'] = 'StockoutNotFound'
+        return category_products, available_space
+
+    pallets_available = list(available_space.loc[available_space['Day'] == stockout, 'Pallets'])[0]
+    MOQ = category_products.loc[i, 'MOQ_pallets']
+
+    if pallets_available >= MOQ:
+        final, status = allocate_normal_case(category_products.loc[i], pallets_available)
+        category_products.loc[i, 'Final_pallets'] = final
+        category_products.loc[i, 'Status'] = status
+
+    else:
+        realloc = reallocate_from_stockpile(category_products, i, pallets_available)
+        if realloc is not None:
+            final, status = realloc
+            category_products.loc[i, 'Final_pallets'] = final
+            category_products.loc[i, 'Status'] = status
         else:
-            category_products.loc[i, 'Final_pallets'] = 0
-            category_products.loc[i, 'Final_units'] = 0
-            category_products.loc[i, 'Status'] = 'StockoutNotFound'
+            final, date, status = postpone_or_block(
+                category_products, i, pallets_available, available_space, stockout
+            )
+            category_products.loc[i, 'Final_pallets'] = final
+            category_products.loc[i, 'Fullfillment_date'] = date
+            category_products.loc[i, 'Status'] = status
+
+    units_per_pallet = category_products.loc[i, 'Units_per_pallet']
+    category_products.loc[i, 'Final_units'] = category_products.loc[i, 'Final_pallets'] * units_per_pallet
+    used_pallets = (category_products.loc[i, 'Final_pallets'] + 0.999).astype(int)
+    available_space = update_available_space(available_space, stockout, used_pallets)
+    return category_products, available_space
+
+
+def get_category_recommendations(recommendations, category, available_space):
+    '''Заполняет некоторые колонки рекомендаций определенной категории продуктов'''
+    category_products = prepare_category_products(recommendations, category)
+    available_space['Day'] = available_space['Day'].astype(str)
+
+    for i in range(len(category_products)):
+        category_products, available_space = process_single_product(
+            category_products, i, available_space
+        )
 
     drop_indexes = list(recommendations[recommendations['Category'] == category].index)
     recommendations_dropped = recommendations.drop(drop_indexes)
     recommendations = pd.concat([recommendations_dropped, category_products], ignore_index=True)
+
     return recommendations, available_space
 
 
