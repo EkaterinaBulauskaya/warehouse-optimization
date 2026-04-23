@@ -1,9 +1,7 @@
 import pandas as pd
 from datetime import timedelta
 from sklearn.linear_model import LinearRegression
-import time
 from pathlib import Path
-
 import calculate_warehouse_available_cap as cap
 import get_product_abc_xyz_analysis as analysis
 
@@ -15,7 +13,7 @@ MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж д�
 OUTPUT_FILENAME = 'out/out_order_recommendations.csv'  # Имя CSV-файла с результатом расчета.
 
 
-def fill_filename_templates(date):
+def fill_filename_template(date):
     '''Заполняет шаблоны имен файлов.'''
     global INPUT_SALES_FILENAME_TEMPLATE
     INPUT_SALES_FILENAME_TEMPLATE = INPUT_SALES_FILENAME_TEMPLATE.format(date)
@@ -25,8 +23,9 @@ def prepare_data():
     '''Читает аргументы, запускает подпроекты, заполняет шаблоны.'''
     warehouse_capacity, date, forecast_days_amount = cap.parse_args()
     available_space, stocks = cap.run_pipeline(warehouse_capacity, date, forecast_days_amount)
+    available_space['Pallets'] = available_space['Pallets'].astype(float)
     abc_xyz_analysis_result = analysis.run_pipeline()
-    fill_filename_templates(date)
+    fill_filename_template(date)
     return available_space, stocks, abc_xyz_analysis_result
 
 
@@ -319,16 +318,16 @@ def check_in_files_presence(in_file_date):
     file_path = Path(INPUT_SALES_FILENAME_TEMPLATE)
     if not file_path.is_file():
         raise ValueError(f'No such file in directory: {INPUT_SALES_FILENAME_TEMPLATE}')
+
+
 def run_pipeline():
     '''Запускает расчет рекомендаций по заказу продуктов.'''
-    t0 = time.time()
     print('Calculation started. Please, wait...')
     available_space, stocks, abc_xyz_analysis_result = prepare_data()
     recommendations = abc_xyz_analysis_result.loc[:, ['SKU', 'Category']]
     recommendations, categories = get_valid_category_products(recommendations)
     recommendations['Stockout'] = get_products_stockout_date(stocks, recommendations)
     recommendations = get_recommendations(recommendations, categories, available_space)
-    print('Calculation time:', time.time() - t0)
     return recommendations
 
 
