@@ -2,22 +2,18 @@
 
 [![CI (tests)](https://github.com/EkaterinaBulauskaya/warehouse-optimization/actions/workflows/warehouse-optimization-ci.yml/badge.svg)](https://github.com/EkaterinaBulauskaya/warehouse-optimization/actions/workflows/warehouse-optimization-ci.yml)
 
-Репозиторий с двумя независимыми Python-проектами (данные и скрипты лежат в своих папках).
+Репозиторий с тремя Python-скриптами для оптимизации склада. Скрипты запускаются из корня, входные данные лежат в `in/`, результаты
+сохраняются в `out/`.
 
-| Проект | Описание | Документация |
-|--------|----------|--------------|
-| [warehouse_cap](projects/warehouse_cap/) | Прогноз и расчёт **свободного места на складе** по дням (продажи, остатки, PO). | [README](projects/warehouse_cap/README.md) |
-| [abc_xyz](projects/abc_xyz/) | **ABC/XYZ-анализ** ассортимента по SKU. | [README](projects/abc_xyz/README.md) |
+| Проект                                 | Описание                                                                       | Документация                            |
+|----------------------------------------|--------------------------------------------------------------------------------|-----------------------------------------|
+| `calculate_warehouse_available_cap.py` | Прогноз и расчёт **свободного места на складе** по дням (продажи, остатки, PO) | [README](docs/warehouse_cap.md)         |
+| `get_product_abc_xyz_analysis.py`      | **ABC/XYZ-анализ** ассортимента по SKU                                         | [README](docs/abc_xyz.md)               |
+| `make_order_recommendations.py`        | Рекомендации по заказам с учётом ABC/XYZ, оборачиваемости и ёмкости склада     | [README](docs/order_recommendations.md) |
 
 ## Общие зависимости
 
-Оба проекта используют `pandas` и `scikit-learn`. Минимально для запуска скриптов:
-
-```bash
-python -m pip install pandas scikit-learn
-```
-
-Для запуска **тестов** из корня репозитория удобнее одна команда — в [`requirements-dev.txt`](requirements-dev.txt) перечислены `pytest`, `pandas` и `scikit-learn`:
+Установка зависимостей:
 
 ```bash
 python -m pip install -r requirements-dev.txt
@@ -26,24 +22,20 @@ python -m pip install -r requirements-dev.txt
 ## Структура репозитория
 
 ```text
-projects/
-  warehouse_cap/     # README, скрипт, notebook, in_*.csv, out_*.csv
-  abc_xyz/           # README, скрипт, notebook, in_*.csv, out_*.csv
+calculate_warehouse_available_cap.py
+get_product_abc_xyz_analysis.py
+make_order_recommendations.py
+in/                  # общие входные CSV
+out/                 # общие выходные CSV
+tests/               # общие автотесты
+docs/                # проектные README
+*.ipynb              # ноутбуки анализов
 ```
 
-Подробности по входным/выходным файлам и командам запуска — в README соответствующей папки.
+Подробности по форматам данных и запуску — в README соответствующих модулей в папке [docs](docs).
 
 ## Тесты
 
-В корне репозитория заданы [`pytest.ini`](pytest.ini) (в т.ч. `pythonpath`) и [`requirements-dev.txt`](requirements-dev.txt). Установите зависимости для тестов ([Общие зависимости](#общие-зависимости)), затем из **корня** репозитория — запуск **всех** тестов:
-
 ```bash
 python -m pytest -v
-```
-
-Только один проект:
-
-```bash
-python -m pytest projects/warehouse_cap/tests -v
-python -m pytest projects/abc_xyz/tests -v
 ```

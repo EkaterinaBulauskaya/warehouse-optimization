@@ -32,16 +32,17 @@ def _sku_frame(n_days, sku, price, cost, sold_per_day, start="2025-01-01"):
 
 class TestCheckInFilesPresence:
     def test_passes_when_input_file_exists(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(m, "INPUT_FILENAME", "in_for_abc_xyz_analysis.csv")
+        monkeypatch.setattr(m, "INPUT_FILENAME", "in/in_for_abc_xyz_analysis.csv")
         monkeypatch.chdir(tmp_path)
-        (tmp_path / "in_for_abc_xyz_analysis.csv").write_text(
+        (tmp_path / "in").mkdir()
+        (tmp_path / "in" / "in_for_abc_xyz_analysis.csv").write_text(
             "Day,SKU,Sold,Price,Cost,Status\n2025-01-01,SKU-1,1,10,8,1\n"
         )
 
         m.check_in_files_presence()
 
     def test_raises_when_input_file_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(m, "INPUT_FILENAME", "in_for_abc_xyz_analysis.csv")
+        monkeypatch.setattr(m, "INPUT_FILENAME", "in/in_for_abc_xyz_analysis.csv")
         monkeypatch.chdir(tmp_path)
 
         with pytest.raises(ValueError, match="in_for_abc_xyz_analysis.csv"):
