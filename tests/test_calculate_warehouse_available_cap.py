@@ -226,7 +226,7 @@ class TestPriority3Issues:
             tmp_path / "in" / f"in_supplied_products_by_{date_tag}.csv", index=False
         )
 
-        products, sku_list = cap.prepare_products(tmp_path / "in" / f"in_sales_by_{date_tag}.csv")
+        products, sku_list, _, _ = cap.prepare_products(tmp_path / "in" / f"in_sales_by_{date_tag}.csv")
         assert len(products) == 2
         assert sku_list[0] == "EARLY"
 
