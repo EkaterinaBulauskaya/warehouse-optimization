@@ -64,6 +64,8 @@ def prepare_products(filename):
     sku_list = list(data['Product variant SKU at time of sale'].unique())
     prepared_products = []
     prepared_skus = []
+    new_products = []
+    new_skus = []
 
     for sku in sku_list:
         sku_data = data[data['Product variant SKU at time of sale'] == sku].reset_index(drop=True)
@@ -71,8 +73,11 @@ def prepare_products(filename):
         if len(daily_data) >= MIN_HISTORY_DAYS:
             prepared_products.append(daily_data)
             prepared_skus.append(sku)
+        else:
+            new_products.append(daily_data)
+            new_skus.append(sku)
 
-    return prepared_products, prepared_skus
+    return prepared_products, prepared_skus, new_products, new_skus
 
 
 def calculate_stocks(predictions, dates, sku_list, inventory_filename):
@@ -84,6 +89,7 @@ def calculate_stocks(predictions, dates, sku_list, inventory_filename):
     stocks.columns = dates[1:]
     inventory_data = pd.read_csv(inventory_filename)
     sku_order = [list(inventory_data['SKU']).index(sku) if sku in list(inventory_data['SKU']) else None for sku in sku_list]
+
     if None in sku_order:
         raise ValueError(f'Some SKU not in inventory file {inventory_filename} (unknown SKU): {sku_list[sku_order.index(None)]!r}')
     stocks[dates[0]] = list(inventory_data.loc[sku_order, dates[0]])
@@ -138,6 +144,22 @@ def include_purchase_orders(stocks_df, po_filename, dates, sku_list):
     for date in dates:
         stocks_df_copy.loc[stocks_df_copy[date] < 0, date] = 0
     return stocks_df_copy
+
+
+def calculate_average_sales_for_new_products(products, prediction_dates):
+    early_sales_average_list = []
+    for product in products:
+        early_sales = list(product.iloc[:MIN_HISTORY_DAYS]['Sold'])
+        early_sales_average = sum(early_sales) / MIN_HISTORY_DAYS
+        early_sales_average_list.append(early_sales_average)
+
+    average_sales_for_new_products = sum(early_sales_average_list) / len(products)
+    average_new_product_prediction = pd.DataFrame()
+    average_new_product_prediction['Day'] = prediction_dates
+    average_new_product_prediction['Predicted Sold'] = average_sales_for_new_products
+
+    average_new_product_prediction['Predicted Sold Total'] = average_new_product_prediction['Predicted Sold'].cumsum()
+    return average_new_product_prediction
 
 
 def extend_daily_sales_to_anchor(daily_df, anchor): 
@@ -216,7 +238,7 @@ def run_pipeline(warehouse_capacity, in_file_date, forecast_days_amount):
     check_in_files_presence(in_file_date)
     print('Calculation started. Please, wait...')
 
-    products, sku_list = prepare_products(INPUT_SALES_FILENAME)
+    products, sku_list, new_products, new_products_sku_list = prepare_products(INPUT_SALES_FILENAME)
     predictions = []
 
     for product_df in products:
@@ -226,8 +248,12 @@ def run_pipeline(warehouse_capacity, in_file_date, forecast_days_amount):
         predictions.append(prediction)
 
     dates = build_dates(products[0]['Day'].max(), forecast_days_amount)
+    average_new_product_prediction = calculate_average_sales_for_new_products(products, dates[1:])
 
-    stocks = calculate_stocks(predictions, dates, sku_list, INPUT_INVENTORY_LEVEL_FILENAME)
+    for _ in new_products:
+        predictions.append(average_new_product_prediction)
+
+    stocks = calculate_stocks(predictions, dates, sku_list + new_products_sku_list, INPUT_INVENTORY_LEVEL_FILENAME)
     stocks = include_purchase_orders(stocks, INPUT_SUPPLIED_PRODUCTS_FILENAME, dates, sku_list)
 
     available_space = get_available_warehouse_space(stocks, dates, warehouse_capacity, INPUT_PALLETS_FILENAME)
