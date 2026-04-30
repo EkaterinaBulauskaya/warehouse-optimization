@@ -18,7 +18,7 @@
 
 - `in/in_sales_by_<in_file_date>.csv` - история продаж.
 - `in/in_inventory_level_on_<in_file_date>.csv` - остатки на стартовую дату.
-- `in/in_supplied_products_by_<in_file_date>.csv` - поставки (PO).
+- `in/in_supplied_products.csv` - поставки (PO).
 - `in/in_products_for_pallet.csv` - количество единиц в паллете.
 - `in/in_for_abc_xyz_analysis.csv` - данные для ABC/XYZ.
 - `in/in_products_MOQ.csv` - минимальная партия заказа по SKU.
@@ -30,7 +30,7 @@
 
 - `in/in_sales_by_<in_file_date>.csv`: `Day`, `Product variant SKU at time of sale`, `Net items sold`.
 - `in/in_inventory_level_on_<in_file_date>.csv`: `SKU` и колонка стартовой даты (`MM/DD/YYYY`) с остатком.
-- `in/in_supplied_products_by_<in_file_date>.csv`: `Day`, `SKU`, `Qty`.
+- `in/in_supplied_products.csv`: `Day`, `SKU`, `Qty`.
 - `in/in_products_for_pallet.csv`: `SKU`, `Units per pallet`.
 - `in/in_for_abc_xyz_analysis.csv`: `Day`, `SKU`, `Sold`, `Price`, `Cost`, `Status`.
 - `in/in_products_MOQ.csv`: `SKU`, `MOQ`.
