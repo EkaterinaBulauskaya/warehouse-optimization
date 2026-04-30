@@ -7,7 +7,7 @@ from sklearn.linear_model import LinearRegression
 
 INPUT_INVENTORY_LEVEL_FILENAME = 'in/in_inventory_level_on_{}.csv'
 INPUT_SALES_FILENAME = 'in/in_sales_by_{}.csv'
-INPUT_SUPPLIED_PRODUCTS_FILENAME = 'in/in_supplied_products_by_{}.csv'
+INPUT_SUPPLIED_PRODUCTS_FILENAME = 'in/in_supplied_products.csv'
 INPUT_PALLETS_FILENAME = 'in/in_products_for_pallet.csv'
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
 OUTPUT_FILENAME = 'out/out_warehouse_available_space.csv'  # Имя CSV-файла с результатом расчета.
@@ -208,8 +208,6 @@ def fill_in_file_templates(in_file_date):
     INPUT_INVENTORY_LEVEL_FILENAME = INPUT_INVENTORY_LEVEL_FILENAME.format(in_file_date)
     global INPUT_SALES_FILENAME
     INPUT_SALES_FILENAME = INPUT_SALES_FILENAME.format(in_file_date)
-    global INPUT_SUPPLIED_PRODUCTS_FILENAME
-    INPUT_SUPPLIED_PRODUCTS_FILENAME = INPUT_SUPPLIED_PRODUCTS_FILENAME.format(in_file_date)
 
 
 def check_in_files_presence(in_file_date):
