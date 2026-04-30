@@ -8,6 +8,7 @@ import get_product_abc_xyz_analysis as analysis
 INPUT_PALLETS_FILENAME = 'in/in_products_for_pallet.csv'
 INPUT_MOQ_FILENAME = 'in/in_products_MOQ.csv'
 INPUT_FRESHNESS_WINDOW_FILENAME = 'in/in_freshness_window_data.csv'
+INPUT_SUPPLIED_PRODUCTS_FILENAME = 'in/in_supplied_products.csv'
 INPUT_SALES_FILENAME_TEMPLATE = 'in/in_sales_by_{}.csv'
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
 OUTPUT_FILENAME = 'out/out_order_recommendations.csv'  # Имя CSV-файла с результатом расчета.
@@ -41,6 +42,9 @@ def get_detes_list(stocks):
 def get_products_stockout_date(stocks, recommendations):
     '''Рассчитывает дату, когда продукт закончится на складе.'''
     dates_list = get_detes_list(stocks)
+    products_supplies = pd.read_csv(INPUT_SUPPLIED_PRODUCTS_FILENAME)
+    freshness_window = pd.read_csv(INPUT_FRESHNESS_WINDOW_FILENAME)
+    first_date = dates_list[0]
     stockout = []
     for sku in recommendations['SKU']:
         product_stockout = None
@@ -48,6 +52,51 @@ def get_products_stockout_date(stocks, recommendations):
             if float(stocks.loc[stocks['SKU'] == sku, date].iloc[0]) == 0:
                 product_stockout = date
                 break
+
+        first_date_reserve = stocks.loc[stocks['SKU'] == sku, first_date]
+        sku_supplies = products_supplies.loc[products_supplies['SKU'] == sku]
+        sku_supplies.loc[:, 'Day'] = pd.to_datetime(sku_supplies['Day'])
+        first_date_ts = pd.to_datetime(first_date)
+        past_supplies = sku_supplies[sku_supplies['Day'] < first_date_ts]
+        past_supplies_sorted = past_supplies.sort_values(
+            by = 'Day', ascending = True).reset_index(drop = True)
+
+        sku_freshness_window = freshness_window.loc[freshness_window['SKU'] == sku, 'Freshness_window']
+        sku_freshness_window = list(sku_freshness_window)[0]
+        first_date_reserve = list(first_date_reserve)[0]
+        if past_supplies_sorted['Qty'].loc[0] >= first_date_reserve:
+            expiring_date = past_supplies_sorted.loc[0, 'Day'] + timedelta(days = sku_freshness_window)
+            expiring_date = cap.normalize_dates([str(expiring_date)])[0]
+            if (product_stockout is None or expiring_date < product_stockout) and expiring_date in dates_list:
+                product_stockout = expiring_date
+        else:
+            total_reserve = 0
+            current_silling_supply_index = -1
+            for i in range(len(past_supplies_sorted)):
+                supply_qty = past_supplies_sorted.loc[i, 'Qty']
+                if supply_qty + total_reserve >= first_date_reserve:
+                    total_reserve += supply_qty
+                    current_silling_supply_index = i
+                else:
+                    break
+
+            write_off = 0
+            for i in range(current_silling_supply_index, -1, -1):
+                expiring_date = past_supplies_sorted.loc[i, 'Day'] + timedelta(days = sku_freshness_window)
+                if expiring_date >= product_stockout:
+                    break
+                else:
+                    product_reserve = stocks.loc[stocks['SKU'] == sku, expiring_date] - write_off
+                    total_reserve -= past_supplies_sorted.loc[i, 'Qty']
+                    if product_reserve >= total_reserve:
+                        write_off += product_reserve - total_reserve
+                        if total_reserve == 0:
+                            product_stockout = expiring_date
+                    elif product_reserve < 0:
+                        for j in range(dates_list.index(expiring_date), -1, -1):
+                            if stocks.loc[stocks['SKU'] == sku, dates_list[j]] >= write_off:
+                                product_stockout = dates_list[j]
+
         stockout.append(product_stockout)
     return stockout
 
@@ -318,6 +367,10 @@ def check_in_files_presence(in_file_date):
     file_path = Path(INPUT_SALES_FILENAME_TEMPLATE)
     if not file_path.is_file():
         raise ValueError(f'No such file in directory: {INPUT_SALES_FILENAME_TEMPLATE}')
+
+    file_path = Path(INPUT_SUPPLIED_PRODUCTS_FILENAME)
+    if not file_path.is_file():
+        raise ValueError(f'No such file in directory: {INPUT_SUPPLIED_PRODUCTS_FILENAME}')
 
 
 def run_pipeline():
