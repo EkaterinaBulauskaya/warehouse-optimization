@@ -88,7 +88,7 @@ def test_run_pipeline_smoke(tmp_path, monkeypatch):
     inventory_df.to_csv(tmp_path / "in" / f"in_inventory_level_on_{date_tag}.csv", index=False)
 
     po_df = pd.DataFrame(columns=["Day", "SKU", "Qty"])
-    po_df.to_csv(tmp_path / "in" / f"in_supplied_products_by_{date_tag}.csv", index=False)
+    po_df.to_csv(tmp_path / "in" / f"in_supplied_products.csv", index=False)
     pallets_df = pd.DataFrame(
         {
             "SKU": [sku],
@@ -122,7 +122,7 @@ class TestCheckInFilesPresence:
     def _reset_input_templates(self, monkeypatch):
         monkeypatch.setattr(cap, "INPUT_INVENTORY_LEVEL_FILENAME", "in/in_inventory_level_on_{}.csv")
         monkeypatch.setattr(cap, "INPUT_SALES_FILENAME", "in/in_sales_by_{}.csv")
-        monkeypatch.setattr(cap, "INPUT_SUPPLIED_PRODUCTS_FILENAME", "in/in_supplied_products_by_{}.csv")
+        monkeypatch.setattr(cap, "INPUT_SUPPLIED_PRODUCTS_FILENAME", "in/in_supplied_products.csv")
         monkeypatch.setattr(cap, "INPUT_PALLETS_FILENAME", "in/in_products_for_pallet.csv")
 
     def _create_base_files(self, tmp_path, date_tag):
@@ -130,7 +130,7 @@ class TestCheckInFilesPresence:
         files = {
             f"in_inventory_level_on_{date_tag}.csv": "SKU,12/31/2025\nSKU-1,100\n",
             f"in_sales_by_{date_tag}.csv": "Day,Product variant SKU at time of sale,Net items sold\n12/31/2025,SKU-1,1\n",
-            f"in_supplied_products_by_{date_tag}.csv": "Day,SKU,Qty\n",
+            "in_supplied_products.csv": "Day,SKU,Qty\n",
             "in_products_for_pallet.csv": "SKU,Units per pallet\nSKU-1,10\n",
         }
         for name, content in files.items():
