@@ -15,7 +15,7 @@
 - `in/in_sales_by_<in_file_date>.csv`
 - `in/in_products_for_pallet.csv`
 - `in/in_inventory_level_on_<in_file_date>.csv`
-- `in/in_supplied_products_by_<in_file_date>.csv`
+- `in/in_supplied_products.csv`
 
 `<in_file_date>`: формат `YYYY-MM-DD` (например, `2025-12-31`).
 
@@ -24,7 +24,7 @@
 - `in/in_sales_by_<in_file_date>.csv`: `Day`, `Product variant SKU at time of sale`, `Net items sold`.
 - `in/in_products_for_pallet.csv`: `SKU`, `Units per pallet`.
 - `in/in_inventory_level_on_<in_file_date>.csv`: `SKU` и колонка даты в формате `MM/DD/YYYY` (например `12/31/2025`) со стартовым остатком.
-- `in/in_supplied_products_by_<in_file_date>.csv`: `Day`, `SKU`, `Qty`.
+- `in/in_supplied_products.csv`: `Day`, `SKU`, `Qty`.
 
 ## Запуск
 
