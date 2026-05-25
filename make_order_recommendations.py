@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 from datetime import timedelta
 from sklearn.linear_model import LinearRegression
@@ -5,13 +6,16 @@ from pathlib import Path
 import calculate_warehouse_available_cap as cap
 import get_product_abc_xyz_analysis as analysis
 
+INPUT_ABC_XYZ_FILENAME = 'in/in_for_abc_xyz_analysis.csv'
 INPUT_PALLETS_FILENAME = 'in/in_products_for_pallet.csv'
 INPUT_MOQ_FILENAME = 'in/in_products_MOQ.csv'
 INPUT_FRESHNESS_WINDOW_FILENAME = 'in/in_freshness_window_data.csv'
 INPUT_SUPPLIED_PRODUCTS_FILENAME = 'in/in_supplied_products.csv'
+INPUT_TIER_PRICES_FILENAME = 'in/in_tier_prices.csv'
 INPUT_SALES_FILENAME_TEMPLATE = 'in/in_sales_by_{}.csv'
 MIN_HISTORY_DAYS = 90  # Минимум дней истории продаж для участия SKU в прогнозе.
 OUTPUT_FILENAME = 'out/out_order_recommendations.csv'  # Имя CSV-файла с результатом расчета.
+DAILY_STORAGE_COST_PER_PALLET = None
 
 
 def fill_filename_template(date):
@@ -20,9 +24,23 @@ def fill_filename_template(date):
     INPUT_SALES_FILENAME_TEMPLATE = INPUT_SALES_FILENAME_TEMPLATE.format(date)
 
 
+def parse_args():
+    '''Читает аргументы CLI и нормализует дату для имен входных файлов.'''
+    if len(sys.argv) != 5:
+        raise ValueError('Usage: python calculate_warehouse_available_cap.py <warehouse_capacity> <in_file_date> <forecast_days_amount> <daily_storage_cost_per_pallet>')
+    warehouse_capacity = int(sys.argv[1])
+    raw_date = sys.argv[2]
+    normalized_date = raw_date[:4] + '-' + raw_date[8:10] + '-' + raw_date[5:7]
+    forecast_days_amount = int(sys.argv[3])
+    daily_st_cost_pp = float(sys.argv[4])
+    return warehouse_capacity, normalized_date, forecast_days_amount, daily_st_cost_pp
+
+
 def prepare_data():
     '''Читает аргументы, запускает подпроекты, заполняет шаблоны.'''
-    warehouse_capacity, date, forecast_days_amount = cap.parse_args()
+    warehouse_capacity, date, forecast_days_amount, daily_st_cost_pp = parse_args()
+    global DAILY_STORAGE_COST_PER_PALLET
+    DAILY_STORAGE_COST_PER_PALLET = daily_st_cost_pp
     available_space, stocks = cap.run_pipeline(warehouse_capacity, date, forecast_days_amount)
     available_space['Pallets'] = available_space['Pallets'].astype(float)
     abc_xyz_analysis_result = analysis.run_pipeline()
@@ -157,6 +175,7 @@ def predict_sales(days_ahead, last_date, sales_df, source_col='Sold', result_col
 def predict_number_of_unit_sold(recommendations):
     '''Расчитывает общее количество товара, что может быть продано до истечения срока годности'''
     predicted_units_sold = []
+    predicted_units_sold_per_day = []
     products_sales_data = prepare_sales_data(INPUT_SALES_FILENAME_TEMPLATE, list(recommendations['SKU']))
     for i in range(len(recommendations)):
         product_predicted_units_sold = None
@@ -165,8 +184,10 @@ def predict_number_of_unit_sold(recommendations):
             freshness_window = recommendations.loc[i, 'Freshness_window']
             predicted_sales = predict_sales(freshness_window, stockout, products_sales_data[i])
             product_predicted_units_sold = predicted_sales['Predicted Sold'].sum()
+            product_predicted_units_sold_per_day = predicted_sales.loc[1, 'Predicted Sold'] - predicted_sales.loc[0, 'Predicted Sold']
         predicted_units_sold.append(product_predicted_units_sold)
-    return predicted_units_sold
+        predicted_units_sold_per_day.append(product_predicted_units_sold_per_day)
+    return predicted_units_sold, predicted_units_sold_per_day
 
 
 def get_recommendations(recommendations, categories, available_space):
@@ -187,7 +208,7 @@ def get_recommendations(recommendations, categories, available_space):
     for sku in recommendations['SKU']:
         freshness_window_data_sorted.append(list(freshness_window_data.loc[freshness_window_data['SKU'] == sku, 'Freshness_window'])[0])
     recommendations['Freshness_window'] = freshness_window_data_sorted
-    recommendations['Predicted_units_sold'] = predict_number_of_unit_sold(recommendations)
+    recommendations['Predicted_units_sold'], recommendations['Predicted_units_sold_per_day'] = predict_number_of_unit_sold(recommendations)
     recommendations['Predicted_pallets_sold'] = round(recommendations['Predicted_units_sold'] / units_per_pallets, 2)
     recommendations['Final_pallets'] = -1.0
     recommendations['Final_units'] = -1.0
@@ -236,7 +257,7 @@ def reallocate_from_stockpile(category_products, i, pallets_available):
     MOQ = category_products.loc[i, 'MOQ_pallets']
 
     if pallets_available + total_stockpile < MOQ:
-        return None  # недостаточно для реаллокации
+        return None
 
     final = pallets_available
     j = 0
@@ -348,6 +369,109 @@ def get_category_recommendations(recommendations, category, available_space):
     return recommendations, available_space
 
 
+def prefill_optimal_column(recommendations):
+    recommendations.loc[[fd is None for fd in list(recommendations['Fullfillment_date'])], 'Optimal_pallets'] = 0
+
+    status_true_recommendations = recommendations[[fd is not None for fd in list(recommendations['Fullfillment_date'])]]
+    const_cond = status_true_recommendations['Final_pallets'] == status_true_recommendations['MOQ_pallets']
+    status_true_recommendations.loc[const_cond, 'Optimal_pallets'] = status_true_recommendations['MOQ_pallets']
+
+    recommendations[[fd is not None for fd in list(recommendations['Fullfillment_date'])]] = status_true_recommendations
+    return recommendations
+
+
+def calculate_profit(pallets, moq, units_per_pallet, tier_prices, unit_cost, palletadays):
+    if pallets < moq:
+        return None
+
+    units_num = units_per_pallet * pallets
+    tier_prices = tier_prices.reset_index(drop = True)
+
+    revenue_per_pallet = round(units_per_pallet * unit_cost, 2)
+    vendor_cost = 0
+    if len(tier_prices) == 1:
+        vendor_cost = float(tier_prices['Price'].iloc[0]) * units_num
+    else:
+        for n in range(len(tier_prices)):
+            frm = tier_prices.loc[n, 'From']
+            to = tier_prices.loc[n, 'To']
+            price = float(tier_prices.loc[n, 'Price'])
+            if frm == '-':
+                to = float(to)
+                if to < units_num:
+                    vendor_cost += to * price
+                else:
+                    vendor_cost += units_num * price
+            elif to == '-':
+                frm = float(frm)
+                if units_num > frm:
+                    vendor_cost += (units_num - frm) * price
+            else:
+                frm = float(frm)
+                to = float(to)
+                if units_num > to:
+                    vendor_cost += (to - frm) * price
+                elif units_num > frm:
+                    vendor_cost += (units_num - frm) * price
+
+    stock_cost = DAILY_STORAGE_COST_PER_PALLET * palletadays
+    profit = round(pallets * revenue_per_pallet - vendor_cost - stock_cost,2)
+    return profit
+
+
+def get_number_palletaday_stored(pallets, units_per_pallet, units_sold_per_day):
+    total_units = pallets * units_per_pallet
+    palletadyds = 0
+    days = 0
+    while total_units > 0 and days < 365:
+        days += 1
+        palletadyds += total_units // units_per_pallet + int(total_units % units_per_pallet != 0)
+        total_units -= units_sold_per_day
+    return palletadyds
+
+
+def get_profit_table(product_data):
+    table_limit = int(product_data['Final_pallets'].max() + 0.999)
+    sku_list = list(product_data['SKU'])
+
+    profit_table = pd.DataFrame()
+    MOQ = pd.read_csv(INPUT_MOQ_FILENAME)
+    tier_prices = pd.read_csv(INPUT_TIER_PRICES_FILENAME)
+    product_costs = pd.read_csv(INPUT_ABC_XYZ_FILENAME)
+    for sku in sku_list:
+        moq = list(MOQ.loc[MOQ['SKU'] == sku, 'MOQ'])[0]
+        tier = tier_prices[tier_prices['SKU'] == sku].reset_index(drop = True)
+        tier = tier[['SKU', 'From', 'To', 'Price']]
+        cost = list(product_costs.loc[product_costs['SKU'] == sku, 'Cost'])[0]
+        upp = list(product_data.loc[product_data['SKU'] == sku, 'Units_per_pallet'])[0]
+        uspd = list(product_data.loc[product_data['SKU'] == sku, 'Predicted_units_sold_per_day'])[0]
+        moq = int(moq / upp + 0.999)
+
+        sku_profit = []
+        for i in range(table_limit + 1):
+            pallets = get_number_palletaday_stored(i, upp, uspd)
+            sku_profit.append(calculate_profit(i, moq, upp , tier, cost, pallets))
+        profit_table[sku] = sku_profit
+    return profit_table
+
+
+def get_recommendations_optimal(recommendations):
+    recommendations['Optimal_pallets'] = None
+    recommendations = prefill_optimal_column(recommendations)
+
+    to_be_optimized_recommendations = recommendations.loc[[op == None for op in list(recommendations['Optimal_pallets'])]]
+    sku_list = list(to_be_optimized_recommendations['SKU'])
+    profit_table = get_profit_table(to_be_optimized_recommendations)
+
+    for sku in sku_list:
+        final_pallets_rez = list(recommendations.loc[recommendations['SKU'] == sku, 'Final_pallets'])[0]
+        sku_cond = to_be_optimized_recommendations['SKU'] == sku
+        to_be_optimized_recommendations.loc[sku_cond, 'Optimal_pallets'] = profit_table.loc[:final_pallets_rez, sku].idxmax()
+
+    recommendations.loc[[op == None for op in list(recommendations['Optimal_pallets'])]] = to_be_optimized_recommendations
+    return recommendations
+
+
 def check_in_files_presence(in_file_date):
     '''Проверка, существует ли путь и является ли он файлом.'''
     fill_filename_template(in_file_date)
@@ -381,6 +505,7 @@ def run_pipeline():
     recommendations, categories = get_valid_category_products(recommendations)
     recommendations['Stockout'] = get_products_stockout_date(stocks, recommendations)
     recommendations = get_recommendations(recommendations, categories, available_space)
+    recommendations = get_recommendations_optimal(recommendations)
     return recommendations
 
 
